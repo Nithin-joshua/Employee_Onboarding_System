@@ -2,6 +2,7 @@ import { Injectable, ConflictException, ForbiddenException, NotFoundException } 
 import { DbService } from '../db/db.service';
 import { Document, Employee } from '../interfaces/types.interface';
 import { MockOcrService } from './ocr.service';
+import { ComplianceService } from '../compliance/compliance.service';
 
 const REQUIRED_DOC_TYPES = ['AADHAAR', 'PAN', 'EDUCATION', 'RELIEVING_LETTER', 'BANK_PROOF', 'PHOTO'];
 
@@ -10,6 +11,7 @@ export class DocumentService {
   constructor(
     private readonly db: DbService,
     private readonly ocrService: MockOcrService,
+    private readonly complianceService: ComplianceService,
   ) {}
 
   private getEmployeeOrThrow(id: string): Employee {
@@ -160,6 +162,7 @@ export class DocumentService {
     }
 
     employee.status = 'COMPLIANCE_PROCESSING';
+    this.complianceService.generateForms(employeeId);
     employee.updatedAt = new Date().toISOString();
     return employee;
   }
