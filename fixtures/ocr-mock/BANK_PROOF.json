@@ -1,0 +1,7 @@
+{
+  "fields": {
+    "accountNumber": "9876543210",
+    "ifsc": "SBIN0001234"
+  },
+  "confidence": 0.97
+}
