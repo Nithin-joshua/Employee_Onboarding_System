@@ -1,6 +1,7 @@
 import { Injectable, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DbService } from '../db/db.service';
 import { Employee, ComplianceForm } from '../interfaces/types.interface';
+import { MilestoneService } from '../milestone/milestone.service';
 
 export function computeComplianceLogic(employee: Employee): { pfApplicable: boolean; esiApplicable: boolean } {
   const pfApplicable = true; // assume org >=20 employees
@@ -10,7 +11,10 @@ export function computeComplianceLogic(employee: Employee): { pfApplicable: bool
 
 @Injectable()
 export class ComplianceService {
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly milestoneService: MilestoneService,
+  ) {}
 
   private getEmployeeOrThrow(id: string): Employee {
     const employee = this.db.employees.find((e) => e.id === id);
@@ -136,6 +140,7 @@ export class ComplianceService {
 
     if (allSigned) {
       employee.status = 'DAY1_READY';
+      this.milestoneService.createMilestonesForEmployee(employeeId);
     }
 
     employee.updatedAt = new Date().toISOString();

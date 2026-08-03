@@ -5,9 +5,10 @@ import { DbModule } from './db/db.module';
 import { EmployeeModule } from './employee/employee.module';
 import { DocumentModule } from './document/document.module';
 import { ComplianceModule } from './compliance/compliance.module';
+import { MilestoneModule } from './milestone/milestone.module';
 
 @Module({
-  imports: [DbModule, EmployeeModule, DocumentModule, ComplianceModule],
+  imports: [DbModule, EmployeeModule, DocumentModule, ComplianceModule, MilestoneModule],
   controllers: [AppController],
   providers: [AppService],
 })
