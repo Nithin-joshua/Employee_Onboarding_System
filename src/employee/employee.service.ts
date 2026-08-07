@@ -1,67 +1,135 @@
 import { Injectable, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DbService } from '../db/db.service';
-import { Employee, EmployeeStatus, Document, ComplianceForm, Milestone } from '../interfaces/types.interface';
+import { Employee, EmployeeStatus } from '../interfaces/types.interface';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
+
+export function mapEmployee(emp: any): Employee {
+  return {
+    id: emp.id,
+    status: emp.status as EmployeeStatus,
+    personal: emp.personal as any,
+    job: emp.job as any,
+    documentIds: emp.documents ? emp.documents.map((d: any) => d.id) : [],
+    complianceFormIds: emp.complianceForms ? emp.complianceForms.map((c: any) => c.id) : [],
+    milestoneIds: emp.milestones ? emp.milestones.map((m: any) => m.id) : [],
+    createdAt: emp.createdAt instanceof Date ? emp.createdAt.toISOString() : emp.createdAt,
+    updatedAt: emp.updatedAt instanceof Date ? emp.updatedAt.toISOString() : emp.updatedAt,
+  };
+}
 
 @Injectable()
 export class EmployeeService {
+  async listEmployees(): Promise<Employee[]> {
+    const list = await this.db.employee.findMany({
+      include: {
+        documents: true,
+        complianceForms: true,
+        milestones: true,
+      },
+    });
+    return list.map(mapEmployee);
+  }
+
   constructor(private readonly db: DbService) {}
 
-  private getEmployeeOrThrow(id: string): Employee {
-    const employee = this.db.employees.find((e) => e.id === id);
+  private async getEmployeeOrThrow(id: string): Promise<Employee> {
+    const employee = await this.db.employee.findUnique({
+      where: { id },
+      include: {
+        documents: true,
+        complianceForms: true,
+        milestones: true,
+      },
+    });
     if (!employee) {
       throw new NotFoundException(`Employee with ID ${id} not found`);
     }
-    return employee;
+    return mapEmployee(employee);
   }
 
-  createEmployee(dto: CreateEmployeeDto): Employee {
-    const newEmployee: Employee = {
-      id: Math.random().toString(36).substring(7),
-      status: 'INVITED',
-      personal: {
-        name: dto.name,
-        dob: dto.dob,
-        phone: dto.phone,
-        email: dto.email,
+  async createEmployee(dto: CreateEmployeeDto): Promise<Employee> {
+    const newEmployee = await this.db.employee.create({
+      data: {
+        id: Math.random().toString(36).substring(7),
+        status: 'INVITED',
+        personal: {
+          name: dto.name,
+          dob: dto.dob,
+          phone: dto.phone,
+          email: dto.email,
+        },
+        job: {
+          title: dto.title,
+          department: dto.department,
+          managerId: dto.managerId,
+          salary: dto.salary,
+          joiningDate: dto.joiningDate,
+        },
       },
-      job: {
-        title: dto.title,
-        department: dto.department,
-        managerId: dto.managerId,
-        salary: dto.salary,
-        joiningDate: dto.joiningDate,
+      include: {
+        documents: true,
+        complianceForms: true,
+        milestones: true,
       },
-      documentIds: [],
-      complianceFormIds: [],
-      milestoneIds: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    });
 
-    this.db.employees.push(newEmployee);
-    return newEmployee;
+    await this.db.auditLog.create({
+      data: {
+        employeeId: newEmployee.id,
+        fromStatus: 'INVITED',
+        toStatus: 'INVITED',
+        actorId: dto.managerId || 'HR_PORTAL',
+        actorRole: 'HR',
+        note: `Employee invited by HR. Title: ${dto.title}, Dept: ${dto.department}`,
+      },
+    });
+
+    return mapEmployee(newEmployee);
   }
 
-  getEmployee(id: string): Employee {
+  async getEmployee(id: string): Promise<Employee> {
     return this.getEmployeeOrThrow(id);
   }
 
-  // INVITED -> DOCUMENTS_PENDING
-  openPreboardingLink(employeeId: string, role: string): Employee {
-    const employee = this.getEmployeeOrThrow(employeeId);
+  async openPreboardingLink(employeeId: string, role: string): Promise<Employee> {
+    const employee = await this.db.employee.findUnique({
+      where: { id: employeeId },
+    });
+
+    if (!employee) {
+      throw new NotFoundException(`Employee with ID ${employeeId} not found`);
+    }
 
     if (employee.status !== 'INVITED') {
       throw new ConflictException(`Cannot open preboarding link. Employee status is ${employee.status}`);
     }
 
-    // Role check: none specified, but let's accept any role.
-    employee.status = 'DOCUMENTS_PENDING';
-    employee.updatedAt = new Date().toISOString();
-    return employee;
+    const updated = await this.db.employee.update({
+      where: { id: employeeId },
+      data: {
+        status: 'DOCUMENTS_PENDING',
+      },
+      include: {
+        documents: true,
+        complianceForms: true,
+        milestones: true,
+      },
+    });
+
+    await this.db.auditLog.create({
+      data: {
+        employeeId,
+        fromStatus: employee.status,
+        toStatus: 'DOCUMENTS_PENDING',
+        actorId: employeeId,
+        actorRole: 'NEW_HIRE',
+        note: 'Onboarding preboarding link opened by candidate',
+      },
+    });
+
+    return mapEmployee(updated);
   }
 
-  // Helper to validate roles
   validateRole(role: string, allowed: string[], employeeId?: string, signedBy?: string) {
     if (allowed.includes('SYSTEM') && role === 'SYSTEM') {
       return;

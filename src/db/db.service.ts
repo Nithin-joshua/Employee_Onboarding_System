@@ -1,17 +1,25 @@
-import { Injectable } from '@nestjs/common';
-import { Employee, Document, ComplianceForm, Milestone } from '../interfaces/types.interface';
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
 
 @Injectable()
-export class DbService {
-  employees: Employee[] = [];
-  documents: Document[] = [];
-  complianceForms: ComplianceForm[] = [];
-  milestones: Milestone[] = [];
+export class DbService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  constructor() {
+    super();
+  }
 
-  clear() {
-    this.employees = [];
-    this.documents = [];
-    this.complianceForms = [];
-    this.milestones = [];
+  async onModuleInit() {
+    await this.$connect();
+  }
+
+  async onModuleDestroy() {
+    await this.$disconnect();
+  }
+
+  async clear() {
+    await this.user.deleteMany({});
+    await this.document.deleteMany({});
+    await this.complianceForm.deleteMany({});
+    await this.milestone.deleteMany({});
+    await this.employee.deleteMany({});
   }
 }

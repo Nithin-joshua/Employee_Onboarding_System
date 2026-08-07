@@ -1,17 +1,50 @@
 import { Injectable, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DbService } from '../db/db.service';
 import { Employee, Milestone } from '../interfaces/types.interface';
+import { mapEmployee } from '../employee/employee.service';
+
+function mapMilestoneToPrismaType(type: string): any {
+  if (type === '30') return 'M30';
+  if (type === '60') return 'M60';
+  if (type === '90') return 'M90';
+  return type;
+}
+
+function mapPrismaTypeToMilestoneType(type: string): any {
+  if (type === 'M30') return '30';
+  if (type === 'M60') return '60';
+  if (type === 'M90') return '90';
+  return type;
+}
+
+export function mapMilestone(m: any): Milestone {
+  return {
+    id: m.id,
+    employeeId: m.employeeId,
+    type: mapPrismaTypeToMilestoneType(m.type),
+    status: m.status as any,
+    dueDate: m.dueDate instanceof Date ? m.dueDate.toISOString() : m.dueDate,
+    checklist: m.checklist as string[],
+  };
+}
 
 @Injectable()
 export class MilestoneService {
   constructor(private readonly db: DbService) {}
 
-  private getEmployeeOrThrow(id: string): Employee {
-    const employee = this.db.employees.find((e) => e.id === id);
+  private async getEmployeeOrThrow(id: string): Promise<Employee> {
+    const employee = await this.db.employee.findUnique({
+      where: { id },
+      include: {
+        documents: true,
+        complianceForms: true,
+        milestones: true,
+      },
+    });
     if (!employee) {
       throw new NotFoundException(`Employee with ID ${id} not found`);
     }
-    return employee;
+    return mapEmployee(employee);
   }
 
   private validateRole(role: string, allowed: string[]) {
@@ -25,34 +58,37 @@ export class MilestoneService {
   }
 
   // Create milestones when entering DAY1_READY
-  createMilestonesForEmployee(employeeId: string) {
+  async createMilestonesForEmployee(employeeId: string): Promise<void> {
     // Clear any existing milestones for this employee
-    this.db.milestones = this.db.milestones.filter((m) => m.employeeId !== employeeId);
-    const employee = this.getEmployeeOrThrow(employeeId);
-    employee.milestoneIds = [];
+    await this.db.milestone.deleteMany({
+      where: { employeeId },
+    });
 
     const types: ('DAY1' | '30' | '60' | '90')[] = ['DAY1', '30', '60', '90'];
     for (const type of types) {
-      const milestone: Milestone = {
-        id: Math.random().toString(36).substring(7),
-        employeeId,
-        type,
-        status: 'PENDING',
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        checklist: [],
-      };
-      this.db.milestones.push(milestone);
-      employee.milestoneIds.push(milestone.id);
+      await this.db.milestone.create({
+        data: {
+          id: Math.random().toString(36).substring(7),
+          employeeId,
+          type: mapMilestoneToPrismaType(type),
+          status: 'PENDING',
+          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          checklist: [],
+        },
+      });
     }
   }
 
   // DAY1_READY -> ACTIVE -> MILESTONE_30 -> MILESTONE_60 -> MILESTONE_90 -> ONBOARDING_COMPLETE
-  completeMilestone(employeeId: string, type: 'DAY1' | '30' | '60' | '90', role: string): Employee {
-    const employee = this.getEmployeeOrThrow(employeeId);
+  async completeMilestone(employeeId: string, type: 'DAY1' | '30' | '60' | '90', role: string): Promise<Employee> {
+    const employee = await this.getEmployeeOrThrow(employeeId);
     this.validateRole(role, ['HR', 'MANAGER']);
 
-    // Find the milestone
-    const milestone = this.db.milestones.find((m) => m.employeeId === employeeId && m.type === type);
+    const prismaType = mapMilestoneToPrismaType(type);
+    const milestone = await this.db.milestone.findFirst({
+      where: { employeeId, type: prismaType },
+    });
+
     if (!milestone) {
       throw new NotFoundException(`Milestone of type ${type} not found for employee ${employeeId}`);
     }
@@ -62,35 +98,64 @@ export class MilestoneService {
     }
 
     // Validate state transition
+    let targetStatus = employee.status;
     if (type === 'DAY1') {
       if (employee.status !== 'DAY1_READY') {
         throw new ConflictException(`Cannot complete DAY1. Employee status is ${employee.status}`);
       }
-      employee.status = 'ACTIVE';
+      targetStatus = 'ACTIVE';
     } else if (type === '30') {
       if (employee.status !== 'ACTIVE') {
         throw new ConflictException(`Cannot complete 30. Employee status is ${employee.status}`);
       }
-      employee.status = 'MILESTONE_30';
+      targetStatus = 'MILESTONE_30';
     } else if (type === '60') {
       if (employee.status !== 'MILESTONE_30') {
         throw new ConflictException(`Cannot complete 60. Employee status is ${employee.status}`);
       }
-      employee.status = 'MILESTONE_60';
+      targetStatus = 'MILESTONE_60';
     } else if (type === '90') {
       if (employee.status !== 'MILESTONE_60' && employee.status !== 'MILESTONE_90') {
         throw new ConflictException(`Cannot complete 90. Employee status is ${employee.status}`);
       }
-      // If we need to support both transitions
-      employee.status = 'ONBOARDING_COMPLETE';
+      targetStatus = 'ONBOARDING_COMPLETE';
     }
 
-    milestone.status = 'DONE';
-    employee.updatedAt = new Date().toISOString();
-    return employee;
+    await this.db.milestone.update({
+      where: { id: milestone.id },
+      data: { status: 'DONE' },
+    });
+
+    const updated = await this.db.employee.update({
+      where: { id: employeeId },
+      data: {
+        status: targetStatus,
+      },
+      include: {
+        documents: true,
+        complianceForms: true,
+        milestones: true,
+      },
+    });
+
+    await this.db.auditLog.create({
+      data: {
+        employeeId,
+        fromStatus: employee.status,
+        toStatus: targetStatus,
+        actorId: role === 'NEW_HIRE' ? employeeId : 'MANAGER_PORTAL',
+        actorRole: role as any,
+        note: `Milestone ${type} completed.`,
+      },
+    });
+
+    return mapEmployee(updated);
   }
 
-  getEmployeeMilestones(employeeId: string): Milestone[] {
-    return this.db.milestones.filter((m) => m.employeeId === employeeId);
+  async getEmployeeMilestones(employeeId: string): Promise<Milestone[]> {
+    const milestones = await this.db.milestone.findMany({
+      where: { employeeId },
+    });
+    return milestones.map(mapMilestone);
   }
 }

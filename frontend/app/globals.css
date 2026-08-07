@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand Lime / Olive (New Hire / Progress) */
+  --color-brand-lime: #BEC658;
+  --color-brand-lime-light: #BDF989;
+  --color-brand-lime-olive: #92996C;
+
+  /* Brand Pink / Magenta (Needs Action / Alert / Secondary Accent) */
+  --color-brand-pink: #ECB6E6;
+  --color-brand-pink-bright: #F68EE1;
+  --color-brand-pink-soft: #F1B7D7;
+
+  /* Brand Lavender / Indigo (HR / In Progress / Tertiary Accent) */
+  --color-brand-lavender: #BFBBF2;
+  --color-brand-lavender-indigo: #A4A0C9;
+  --color-brand-lavender-light: #F3D6FB;
+
+  /* Brand Amber / Orange (Manager / Warning / Highlight) */
+  --color-brand-orange: #ED7D42;
+  --color-brand-amber: #F7B06B;
+  --color-brand-yellow: #F0D366;
+
+  /* Success Sage / Mint (Alt-Green / Verification) */
+  --color-brand-sage-light: #E1E9D2;
+  --color-brand-sage: #B5C7B0;
+  --color-brand-mint: #E3F4F6;
+
+  /* Anchor / Dark Neutrals */
+  --color-brand-black: #121212;
+  --color-brand-black-pure: #020202;
+  --color-brand-navy: #1C1731;
+  --color-brand-charcoal: #383944;
+
+  /* Surface / Light Neutrals */
+  --color-brand-surface: #FDFDFD;
+  --color-brand-cream: #F8F2E2;
+  --color-brand-cool-white: #F6F8F4;
+  --color-brand-neutral-white: #FAFBFB;
+
+  /* Borders & Secondary Text */
+  --color-brand-grey-light: #D6D8DC;
+  --color-brand-grey-border: #DFE0DF;
+  --color-brand-grey-slate: #BBCACB;
+  --color-brand-grey-muted: #807689;
+
+  /* Base Fonts */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Custom Animations */
+  --animate-fadeIn: fadeIn 0.25s ease-out;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+:root {
+  --background: #FAFBFB;
+  --foreground: #121212;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+

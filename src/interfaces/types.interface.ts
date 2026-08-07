@@ -23,6 +23,7 @@ export interface Document {
   extracted: Record<string, unknown> | null;
   reviewedBy: string | null;
   rejectionReason: string | null;
+  storagePath: string | null;
 }
 
 export interface ComplianceForm {
@@ -42,3 +43,15 @@ export interface Milestone {
   dueDate: string;
   checklist: string[];
 }
+
+export interface AuditLog {
+  id: string;
+  employeeId: string;
+  fromStatus: EmployeeStatus;
+  toStatus: EmployeeStatus;
+  actorId: string;
+  actorRole: "HR" | "MANAGER" | "NEW_HIRE" | "SYSTEM";
+  timestamp: string;
+  note?: string;
+}
+
