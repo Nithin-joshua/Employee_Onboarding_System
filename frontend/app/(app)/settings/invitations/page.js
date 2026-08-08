@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { request } from '../../../../lib/apiClient';
+import { Key, ArrowLeft, X, Loader2, Plus } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function InvitationCodes() {
   const { data: session } = useSession();
@@ -88,15 +90,16 @@ export default function InvitationCodes() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <p className="text-gray-500 animate-pulse">Loading invitations...</p>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
+        <Loader2 className="w-5 h-5 text-[var(--color-accent)] animate-spin" />
+        <p className="text-[var(--text-muted)] text-[14px] animate-pulse">Loading invitations...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-6 bg-red-50 text-red-800 rounded border border-red-200 max-w-xl mx-auto mt-10">
+      <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-[8px] max-w-xl mx-auto mt-10">
         <p className="font-bold">Error</p>
         <p className="text-sm mt-1">{error}</p>
       </div>
@@ -104,20 +107,26 @@ export default function InvitationCodes() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <motion.div 
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+      className="space-y-6"
+    >
+      {/* Page Header */}
+      <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Onboarding Invitation Codes</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-[24px] font-semibold tracking-tight text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>Invitation Codes</h1>
+          <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
             Generate and manage codes for candidates to register themselves.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <button
             onClick={() => router.back()}
-            className="h-10 px-5 border border-gray-300 rounded-full font-semibold text-sm hover:bg-gray-50 transition-all shadow-sm"
+            className="h-9 px-4 border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--foreground)] rounded-[8px] font-medium text-[13px] hover:bg-[var(--border-color)]/40 transition-all flex items-center gap-1.5"
           >
-            Back
+            <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
           <button
             onClick={() => {
@@ -125,47 +134,50 @@ export default function InvitationCodes() {
               setFormSuccess('');
               setShowModal(true);
             }}
-            className="h-10 px-5 bg-black text-white rounded-full font-semibold text-sm hover:bg-gray-800 transition-all shadow-sm"
+            className="h-9 px-4 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-[8px] font-semibold text-[13px] transition-all flex items-center gap-1.5"
+            id="generate-code-btn"
           >
-            + Generate Code
+            <Plus className="w-3.5 h-3.5" /> Generate Code
           </button>
         </div>
       </div>
 
       {/* Codes Table */}
-      <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[12px] overflow-hidden shadow-sm" style={{ boxShadow: 'var(--shadow-sm)' }}>
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b bg-gray-50 text-gray-500 text-xs font-semibold uppercase tracking-wider">
-              <th className="py-3 px-4">Code</th>
-              <th className="py-3 px-4">Job Title</th>
-              <th className="py-3 px-4">Department</th>
-              <th className="py-3 px-4">Manager ID</th>
-              <th className="py-3 px-4">Salary</th>
-              <th className="py-3 px-4">Status</th>
+            <tr className="border-b border-[var(--border-color)] text-[var(--text-muted)] text-[11px] font-semibold uppercase tracking-wider">
+              <th className="py-3 px-5">
+                <span className="flex items-center gap-1.5"><Key className="w-3.5 h-3.5" /> Code</span>
+              </th>
+              <th className="py-3 px-5">Job Title</th>
+              <th className="py-3 px-5">Department</th>
+              <th className="py-3 px-5 hidden md:table-cell">Manager ID</th>
+              <th className="py-3 px-5">Salary</th>
+              <th className="py-3 px-5">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y text-sm text-gray-700">
+          <tbody className="divide-y divide-[var(--border-color)] text-[var(--foreground)] text-[13px]">
             {invitations.length === 0 ? (
               <tr>
-                <td colSpan="6" className="py-8 text-center text-gray-400">
+                <td colSpan="6" className="py-10 text-center text-[var(--text-muted)]">
                   No invitation codes generated yet.
                 </td>
               </tr>
             ) : (
               invitations.map((inv) => (
-                <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="py-3 px-4 font-mono font-bold text-black">{inv.code}</td>
-                  <td className="py-3 px-4">{inv.jobTitle}</td>
-                  <td className="py-3 px-4">{inv.department}</td>
-                  <td className="py-3 px-4 font-mono text-xs">{inv.managerId}</td>
-                  <td className="py-3 px-4">${inv.salary.toLocaleString()}</td>
-                  <td className="py-3 px-4">
-                    <span
-                      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        inv.used ? 'bg-gray-100 text-gray-600' : 'bg-green-100 text-green-700'
-                      }`}
-                    >
+                <tr key={inv.id} className="hover:bg-[var(--background)]/60 transition-colors">
+                  <td className="py-3 px-5 font-mono font-bold text-[var(--color-accent)] tracking-wider">{inv.code}</td>
+                  <td className="py-3 px-5 font-medium">{inv.jobTitle}</td>
+                  <td className="py-3 px-5">{inv.department}</td>
+                  <td className="py-3 px-5 font-mono text-xs text-[var(--text-muted)] hidden md:table-cell">{inv.managerId}</td>
+                  <td className="py-3 px-5 font-semibold">${inv.salary.toLocaleString()}</td>
+                  <td className="py-3 px-5">
+                    <span className={`inline-block px-2 py-0.5 rounded-[4px] text-[11px] font-semibold uppercase tracking-wider ${
+                      inv.used 
+                        ? 'bg-[var(--border-color)]/60 text-[var(--text-muted)]' 
+                        : 'bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/20'
+                    }`}>
                       {inv.used ? 'Used' : 'Unused'}
                     </span>
                   </td>
@@ -177,108 +189,120 @@ export default function InvitationCodes() {
       </div>
 
       {/* Generate Code Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl border w-full max-w-md p-6 relative animate-in fade-in zoom-in-95 duration-150">
-            <button
-              onClick={() => setShowModal(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+      <AnimatePresence>
+        {showModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+              className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[12px] shadow-xl w-full max-w-md p-6 relative"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Generate Invitation Code</h3>
-
-            {formError && (
-              <div className="p-3 mb-4 text-xs text-red-700 bg-red-100 border border-red-200 rounded">
-                {formError}
-              </div>
-            )}
-            {formSuccess && (
-              <div className="p-3 mb-4 text-xs text-green-700 bg-green-100 border border-green-200 rounded font-semibold">
-                {formSuccess}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Job Title</label>
-                <input
-                  type="text"
-                  name="jobTitle"
-                  value={form.jobTitle}
-                  onChange={handleChange}
-                  placeholder="e.g. Senior Backend Engineer"
-                  className="w-full p-2 border rounded text-sm"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Department</label>
-                <input
-                  type="text"
-                  name="department"
-                  value={form.department}
-                  onChange={handleChange}
-                  placeholder="e.g. Engineering"
-                  className="w-full p-2 border rounded text-sm"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Manager ID</label>
-                <input
-                  type="text"
-                  name="managerId"
-                  value={form.managerId}
-                  onChange={handleChange}
-                  placeholder="e.g. mgr_123"
-                  className="w-full p-2 border rounded text-sm"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Annual Salary ($)</label>
-                  <input
-                    type="number"
-                    name="salary"
-                    value={form.salary}
-                    onChange={handleChange}
-                    placeholder="e.g. 90000"
-                    className="w-full p-2 border rounded text-sm"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Joining Date</label>
-                  <input
-                    type="date"
-                    name="joiningDate"
-                    value={form.joiningDate}
-                    onChange={handleChange}
-                    className="w-full p-2 border rounded text-sm"
-                    required
-                  />
-                </div>
-              </div>
-
               <button
-                type="submit"
-                disabled={formLoading}
-                className="w-full bg-black text-white p-2.5 rounded-full font-semibold text-sm hover:bg-gray-800 disabled:bg-gray-400 mt-2 transition-colors"
+                onClick={() => setShowModal(false)}
+                className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--foreground)] p-1 rounded-[6px] border border-[var(--border-color)] hover:bg-[var(--background)] transition-all"
               >
-                {formLoading ? 'Generating...' : 'Generate and Save'}
+                <X className="w-3.5 h-3.5" />
               </button>
-            </form>
+
+              <h3 className="text-[18px] font-semibold text-[var(--foreground)] mb-4 tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>Generate Invitation Code</h3>
+
+              {formError && (
+                <div className="p-3 mb-4 text-xs text-red-500 bg-red-500/10 border border-red-500/20 rounded-[6px]">
+                  {formError}
+                </div>
+              )}
+              {formSuccess && (
+                <div className="p-3 mb-4 text-xs text-[var(--color-accent)] bg-[var(--color-accent-soft)] border border-[var(--color-accent)]/20 rounded-[6px] font-semibold">
+                  {formSuccess}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">Job Title</label>
+                  <input
+                    type="text"
+                    name="jobTitle"
+                    value={form.jobTitle}
+                    onChange={handleChange}
+                    placeholder="e.g. Senior Backend Engineer"
+                    className="w-full h-10 px-3 rounded-[8px] border border-[var(--border-color)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] text-[14px]"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">Department</label>
+                  <input
+                    type="text"
+                    name="department"
+                    value={form.department}
+                    onChange={handleChange}
+                    placeholder="e.g. Engineering"
+                    className="w-full h-10 px-3 rounded-[8px] border border-[var(--border-color)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] text-[14px]"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">Manager ID</label>
+                  <input
+                    type="text"
+                    name="managerId"
+                    value={form.managerId}
+                    onChange={handleChange}
+                    placeholder="e.g. mgr_123"
+                    className="w-full h-10 px-3 rounded-[8px] border border-[var(--border-color)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] text-[14px]"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">Annual Salary ($)</label>
+                    <input
+                      type="number"
+                      name="salary"
+                      value={form.salary}
+                      onChange={handleChange}
+                      placeholder="e.g. 90000"
+                      className="w-full h-10 px-3 rounded-[8px] border border-[var(--border-color)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] text-[14px]"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">Joining Date</label>
+                    <input
+                      type="date"
+                      name="joiningDate"
+                      value={form.joiningDate}
+                      onChange={handleChange}
+                      className="w-full h-10 px-3 rounded-[8px] border border-[var(--border-color)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] text-[14px]"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={formLoading}
+                  className="w-full h-10 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-[8px] font-semibold text-[14px] transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-2 flex items-center justify-center gap-1.5"
+                >
+                  {formLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Generating...
+                    </>
+                  ) : (
+                    'Generate and Save'
+                  )}
+                </button>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }

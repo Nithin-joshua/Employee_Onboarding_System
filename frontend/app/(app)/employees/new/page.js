@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { request } from '../../../../lib/apiClient';
+import { ArrowLeft, UserPlus, CheckCircle2, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function NewEmployee() {
   const { data: session } = useSession();
@@ -70,150 +72,175 @@ export default function NewEmployee() {
 
   if (success) {
     return (
-      <div className="max-w-md mx-auto p-6 bg-white border border-green-200 rounded shadow-sm text-center">
-        <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-          </svg>
+      <motion.div 
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-md mx-auto p-6 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[12px] text-center space-y-6 shadow-sm"
+        style={{ boxShadow: 'var(--shadow-sm)' }}
+      >
+        <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto border border-emerald-100">
+          <CheckCircle2 className="w-6 h-6" strokeWidth={1.5} />
         </div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Invitation Sent!</h2>
-        <p className="text-gray-600 mb-6">
-          <strong>{invitedName}</strong> has been successfully registered. A User account is active, and a temporary password has been emailed to <strong>{invitedEmail}</strong>.
-        </p>
+        <div className="space-y-2">
+          <h2 className="text-[20px] font-semibold text-[var(--foreground)] tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>Invitation Sent!</h2>
+          <p className="text-[var(--text-muted)] text-[13px] leading-relaxed">
+            <strong className="text-[var(--foreground)]">{invitedName}</strong> has been successfully registered. A User account is active, and a temporary password has been emailed to <strong className="text-[var(--foreground)]">{invitedEmail}</strong>.
+          </p>
+        </div>
         <button
           onClick={() => router.push('/dashboard')}
-          className="w-full bg-black text-white p-2 rounded-full font-bold hover:bg-gray-800"
+          className="w-full h-10 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-[8px] font-semibold text-[14px] transition-all"
         >
           Go to Dashboard
         </button>
-      </div>
+      </motion.div>
     );
   }
 
+  const inputClass = "w-full h-10 px-3 rounded-[8px] border border-[var(--border-color)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] text-[14px]";
+  const labelClass = "block text-[13px] font-medium text-[var(--foreground)]";
+
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white border rounded shadow-sm">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold">Invite New Employee</h2>
+    <motion.div 
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+      className="max-w-2xl mx-auto p-6 md:p-8 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[12px] shadow-sm space-y-6"
+      style={{ boxShadow: 'var(--shadow-sm)' }}
+    >
+      <div className="flex justify-between items-center border-b border-[var(--border-color)] pb-4">
+        <h2 className="text-[18px] font-semibold tracking-tight text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>Invite New Employee</h2>
         <button
           onClick={() => router.back()}
-          className="text-gray-500 hover:underline text-sm"
+          className="h-8 px-3 rounded-[8px] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--foreground)] text-xs font-semibold flex items-center gap-1 bg-[var(--card-bg)]"
         >
-          Cancel
+          <ArrowLeft className="w-3.5 h-3.5" /> Back
         </button>
       </div>
 
-      {error && <p className="text-red-500 mb-4 text-sm">{error}</p>}
+      {error && (
+        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-[6px] text-xs">
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-semibold mb-1">Full Name</label>
+        <div className="space-y-1.5">
+          <label className={labelClass}>Full Name</label>
           <input
             type="text"
             name="name"
             value={form.name}
             onChange={handleChange}
-            className="w-full p-2 border rounded"
+            placeholder="John Doe"
+            className={inputClass}
             required
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold mb-1">Email</label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className={labelClass}>Email</label>
             <input
               type="email"
               name="email"
               value={form.email}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              placeholder="name@company.com"
+              className={inputClass}
               required
             />
           </div>
-          <div>
-            <label className="block text-sm font-semibold mb-1">Phone</label>
+          <div className="space-y-1.5">
+            <label className={labelClass}>Phone</label>
             <input
               type="text"
               name="phone"
               value={form.phone}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              placeholder="+1 (555) 000-0000"
+              className={inputClass}
               required
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold mb-1">Date of Birth</label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className={labelClass}>Date of Birth</label>
             <input
               type="date"
               name="dob"
               value={form.dob}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className={inputClass}
               required
             />
           </div>
-          <div>
-            <label className="block text-sm font-semibold mb-1">Joining Date</label>
+          <div className="space-y-1.5">
+            <label className={labelClass}>Joining Date</label>
             <input
               type="date"
               name="joiningDate"
               value={form.joiningDate}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className={inputClass}
               required
             />
           </div>
         </div>
 
-        <hr className="my-4" />
+        <div className="border-t border-[var(--border-color)] my-4"></div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold mb-1">Job Title</label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className={labelClass}>Job Title</label>
             <input
               type="text"
               name="title"
               value={form.title}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              placeholder="Software Engineer"
+              className={inputClass}
               required
             />
           </div>
-          <div>
-            <label className="block text-sm font-semibold mb-1">Department</label>
+          <div className="space-y-1.5">
+            <label className={labelClass}>Department</label>
             <input
               type="text"
               name="department"
               value={form.department}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              placeholder="Engineering"
+              className={inputClass}
               required
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold mb-1">Manager ID</label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className={labelClass}>Manager ID (UUID)</label>
             <input
               type="text"
               name="managerId"
               value={form.managerId}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              placeholder="Manager User ID"
+              className={inputClass}
               required
             />
           </div>
-          <div>
-            <label className="block text-sm font-semibold mb-1">Salary</label>
+          <div className="space-y-1.5">
+            <label className={labelClass}>Salary</label>
             <input
               type="number"
               name="salary"
               value={form.salary}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              placeholder="120000"
+              className={inputClass}
               required
             />
           </div>
@@ -222,11 +249,19 @@ export default function NewEmployee() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600 disabled:bg-gray-400 font-semibold"
+          className="w-full h-10 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-[8px] font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 mt-2"
         >
-          {loading ? 'Creating Employee...' : 'Invite Employee'}
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" /> Inviting...
+            </>
+          ) : (
+            <>
+              <UserPlus className="w-4 h-4" /> Invite Employee
+            </>
+          )}
         </button>
       </form>
-    </div>
+    </motion.div>
   );
 }

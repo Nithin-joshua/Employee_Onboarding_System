@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -25,8 +27,14 @@ export default function Home() {
   }, [session, status, router]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[50vh]">
-      <p className="text-gray-500">Redirecting...</p>
-    </div>
+    <motion.div 
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+      className="flex flex-col items-center justify-center min-h-[60vh] gap-3"
+    >
+      <Loader2 className="w-6 h-6 text-[var(--color-accent)] animate-spin" />
+      <p className="text-[var(--text-muted)] text-[14px] font-medium tracking-wide">Redirecting you...</p>
+    </motion.div>
   );
 }

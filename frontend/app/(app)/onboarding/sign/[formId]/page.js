@@ -4,6 +4,8 @@ import { useEffect, useState, use, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { request } from '../../../../../lib/apiClient';
+import { Edit3, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function ComplianceFormSigning({ params: paramsPromise }) {
   const params = use(paramsPromise);
@@ -57,54 +59,95 @@ export default function ComplianceFormSigning({ params: paramsPromise }) {
     }
   };
 
-  if (loading) return <div className="text-gray-500 p-4">Loading form...</div>;
-  if (error) return <div className="text-red-500 p-4">{error}</div>;
-  if (!targetForm) return <div className="text-gray-500 p-4">Compliance form not found</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
+        <Loader2 className="w-5 h-5 text-[var(--color-accent)] animate-spin" />
+        <p className="text-[var(--text-muted)] text-[14px]">Loading form...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-[8px] max-w-xl mx-auto mt-10">
+        {error}
+      </div>
+    );
+  }
+
+  if (!targetForm) {
+    return (
+      <div className="p-6 text-center text-[var(--text-muted)] mt-10">
+        Compliance form not found.
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-md mx-auto p-6 bg-white border rounded shadow-sm">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold">Sign {targetForm.type}</h2>
-        <button onClick={() => router.back()} className="text-gray-500 hover:underline text-sm">
+    <motion.div 
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+      className="max-w-md mx-auto bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[12px] p-6 md:p-8 space-y-6 shadow-sm"
+      style={{ boxShadow: 'var(--shadow-sm)' }}
+    >
+      <div className="flex justify-between items-center border-b border-[var(--border-color)] pb-4">
+        <h2 className="text-[18px] font-semibold tracking-tight text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>Sign {targetForm.type}</h2>
+        <button 
+          onClick={() => router.back()} 
+          className="h-8 px-3 rounded-[8px] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--foreground)] text-xs font-semibold flex items-center gap-1"
+        >
           Cancel
         </button>
       </div>
 
-      <div className="space-y-4 text-sm mb-6 bg-gray-50 p-4 border rounded">
-        <p className="font-semibold text-base mb-2">Form Data</p>
+      <div className="space-y-2 text-[13px] bg-[var(--background)] p-4 border border-[var(--border-color)] rounded-[8px]">
+        <p className="font-semibold text-[14px] mb-2 text-[var(--foreground)] border-b border-[var(--border-color)] pb-1.5" style={{ fontFamily: 'var(--font-display)' }}>Form Data Preview</p>
         {Object.entries(targetForm.data || {}).map(([key, val]) => (
-          <p key={key} className="capitalize">
-            <span className="font-semibold">{key.replace(/([A-Z])/g, ' $1')}:</span> {String(val)}
+          <p key={key} className="capitalize flex justify-between gap-2">
+            <span className="font-semibold text-[var(--text-muted)]">{key.replace(/([A-Z])/g, ' $1')}:</span> 
+            <span className="font-medium text-[var(--foreground)]">{String(val)}</span>
           </p>
         ))}
       </div>
 
       <form onSubmit={handleSign} className="space-y-4">
         {actionError && (
-          <div className="p-3 text-sm text-red-700 bg-red-100 border border-red-200 rounded">
+          <div className="p-3 text-xs text-red-500 bg-red-500/10 border border-red-500/20 rounded-[6px]">
             {actionError}
           </div>
         )}
-        <div>
-          <label className="block text-sm font-semibold mb-1">Type your full name to E-Sign</label>
+        
+        <div className="space-y-1.5">
+          <label className="block text-[13px] font-medium text-[var(--foreground)]">Type your full name to E-Sign</label>
           <input
             type="text"
             value={signingName}
             onChange={(e) => setSigningName(e.target.value)}
             placeholder="John Doe"
-            className="w-full p-2 border rounded"
+            className="w-full h-10 px-3 rounded-[8px] border border-[var(--border-color)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] text-[14px]"
             required
             id="signing-name-input"
           />
         </div>
+
         <button
           type="submit"
           disabled={actionLoading}
-          className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600 disabled:bg-gray-400 font-bold"
+          className="w-full h-10 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-[8px] font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
         >
-          {actionLoading ? 'Signing Form...' : 'Complete Signature'}
+          {actionLoading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" /> Signing...
+            </>
+          ) : (
+            <>
+              <Edit3 className="w-4 h-4" /> Complete Signature
+            </>
+          )}
         </button>
       </form>
-    </div>
+    </motion.div>
   );
 }

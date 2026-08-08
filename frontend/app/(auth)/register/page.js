@@ -2,14 +2,19 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Loader2, ArrowLeft } from 'lucide-react';
+
+const spring = { type: 'spring', stiffness: 300, damping: 28 };
 
 export default function Register() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [otpSuccessMessage, setOtpSuccessMessage] = useState('');
-  const [step, setStep] = useState(1); // 1 = Registration Form, 2 = OTP Verification
-  const [regSection, setRegSection] = useState('A'); // 'A' = Personal Details, 'B' = Credentials
+  const [step, setStep] = useState(1);
+  const [regSection, setRegSection] = useState('A');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [otpValues, setOtpValues] = useState(['', '', '', '', '', '']);
@@ -22,35 +27,24 @@ export default function Register() {
     phone: '',
   });
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleOtpChange = (index, value) => {
     const cleanValue = value.replace(/[^0-9]/g, '');
     if (cleanValue.length > 1) {
       const pasted = cleanValue.slice(0, 6).split('');
       const newOtpValues = [...otpValues];
-      pasted.forEach((char, i) => {
-        newOtpValues[i] = char;
-      });
+      pasted.forEach((char, i) => { newOtpValues[i] = char; });
       setOtpValues(newOtpValues);
-      const combined = newOtpValues.join('');
-      setOtp(combined);
-      const nextFocus = Math.min(pasted.length, 5);
-      document.getElementById(`otp-${nextFocus}`)?.focus();
+      setOtp(newOtpValues.join(''));
+      document.getElementById(`otp-${Math.min(pasted.length, 5)}`)?.focus();
       return;
     }
-
     const newOtpValues = [...otpValues];
     newOtpValues[index] = cleanValue;
     setOtpValues(newOtpValues);
-    const combined = newOtpValues.join('');
-    setOtp(combined);
-
-    if (cleanValue && index < 5) {
-      document.getElementById(`otp-${index + 1}`)?.focus();
-    }
+    setOtp(newOtpValues.join(''));
+    if (cleanValue && index < 5) document.getElementById(`otp-${index + 1}`)?.focus();
   };
 
   const handleOtpKeyDown = (index, e) => {
@@ -71,19 +65,13 @@ export default function Register() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (regSection === 'A') {
-      handleContinue(e);
-      return;
-    }
-
+    if (regSection === 'A') { handleContinue(e); return; }
     if (!form.invitationCode || !form.pass) {
       setError('Please fill in all security details.');
       return;
     }
-
     setLoading(true);
     setError('');
-
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000';
       const res = await fetch(`${baseUrl}/auth/register`, {
@@ -91,12 +79,10 @@ export default function Register() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-
       if (!res.ok) {
         const errData = await res.json();
         throw new Error(errData.message || 'Registration failed');
       }
-
       setEmail(form.email);
       setStep(2);
     } catch (err) {
@@ -110,7 +96,6 @@ export default function Register() {
     e.preventDefault();
     setLoading(true);
     setError('');
-
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000';
       const res = await fetch(`${baseUrl}/auth/verify-otp`, {
@@ -118,12 +103,10 @@ export default function Register() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, otp }),
       });
-
       if (!res.ok) {
         const errData = await res.json();
         throw new Error(errData.message || 'Verification failed');
       }
-
       router.push('/signin');
     } catch (err) {
       setError(err.message);
@@ -143,11 +126,7 @@ export default function Register() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || 'Resend failed');
-      }
+      if (!res.ok) throw new Error((await res.json()).message || 'Resend failed');
       setOtpSuccessMessage('A new OTP has been sent to your email.');
     } catch (err) {
       setError(err.message);
@@ -167,315 +146,187 @@ export default function Register() {
   };
 
   const strength = getPasswordStrength(form.pass);
-  const getStrengthColor = () => {
-    if (strength <= 1) return 'bg-brand-pink';
-    if (strength <= 3) return 'bg-brand-amber';
-    return 'bg-brand-lime';
-  };
+  const strengthColor = strength <= 1 ? 'bg-red-400' : strength <= 3 ? 'bg-amber-400' : 'bg-emerald-500';
+  const strengthLabel = strength <= 1 ? 'Weak' : strength <= 3 ? 'Fair' : 'Strong';
 
-  // Compute overall progress info
-  const getCurrentProgressInfo = () => {
-    if (step === 2) {
-      return { stepLabel: 'Step 3 of 3', width: '100%', title: 'Verify OTP' };
-    }
-    if (regSection === 'A') {
-      return { stepLabel: 'Step 1 of 3', width: '33%', title: 'Personal Info' };
-    }
-    return { stepLabel: 'Step 2 of 3', width: '66%', title: 'Credentials' };
-  };
+  // Step indicator
+  const totalSteps = [
+    { label: 'Personal' },
+    { label: 'Credentials' },
+    { label: 'Verify' },
+  ];
+  const currentStepIndex = step === 2 ? 2 : regSection === 'A' ? 0 : 1;
 
-  const progress = getCurrentProgressInfo();
+  const inputClass = "w-full h-10 px-3 rounded-[8px] border border-[var(--border-color)] bg-[var(--background)] text-[var(--foreground)] text-[14px] placeholder:text-[var(--text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] transition-all";
+  const labelClass = "block text-[13px] font-medium text-[var(--foreground)] mb-1.5";
 
   return (
-    <div className="h-screen w-screen flex flex-col md:flex-row bg-brand-neutral-white overflow-hidden">
-      {/* Left Column: Visual Panel (45%) */}
-      <div className="hidden md:flex md:w-[45%] h-full bg-[#F1B7D7] relative overflow-hidden items-center justify-center">
-        {/* Soft-edged geometric shapes/blobs */}
-        <div className="absolute top-[10%] left-[-10%] w-[60%] h-[60%] bg-[#BFBBF2] rounded-full blur-[90px] opacity-35 animate-pulse"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[70%] h-[70%] bg-[#BEC658] rounded-full blur-[100px] opacity-25"></div>
-        <div className="absolute top-[35%] left-[25%] w-[45%] h-[45%] bg-[#ECB6E6] rounded-full blur-[80px] opacity-40"></div>
-
-        {/* Custom geometric compositions and icon accents */}
-        <div className="relative z-10 flex flex-col items-center justify-center text-center p-8 space-y-6 select-none">
-          <div className="flex gap-4">
-            <div className="w-16 h-16 rounded-3xl bg-brand-surface shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-white/40 flex items-center justify-center text-[#F68EE1] transform rotate-[-6deg] hover:rotate-0 transition-transform duration-300">
-              <span className="material-symbols-outlined text-[36px] font-semibold">description</span>
-            </div>
-            <div className="w-16 h-16 rounded-3xl bg-brand-surface shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-white/40 flex items-center justify-center text-[#5c598a] transform rotate-[8deg] hover:rotate-0 transition-transform duration-300">
-              <span className="material-symbols-outlined text-[36px] font-semibold">assignment_turned_in</span>
-            </div>
-          </div>
-          <div className="max-w-xs space-y-2">
-            <h2 className="text-brand-black font-bold text-[20px] tracking-tight">Onboarding Registration</h2>
-            <p className="text-brand-grey-muted text-[14px] leading-relaxed">Provide your details to initiate document verification and contract generation.</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Right Column: Form Panel (55%) */}
-      <div className="w-full md:w-[55%] h-full flex flex-col justify-center items-center p-8 lg:p-12 relative bg-brand-neutral-white">
-        {step === 1 && regSection === 'B' && (
-          <button
-            onClick={() => setRegSection('A')}
-            className="absolute top-8 left-8 flex items-center text-brand-grey-muted hover:text-brand-black transition-colors font-semibold text-[14px] select-none"
-          >
-            ← Back
-          </button>
-        )}
-        {step === 2 && (
-          <button
-            onClick={() => {
-              setStep(1);
-              setRegSection('B');
-            }}
-            className="absolute top-8 left-8 flex items-center text-brand-grey-muted hover:text-brand-black transition-colors font-semibold text-[14px] select-none"
-          >
-            ← Back
-          </button>
-        )}
-
-        {/* Compact Horizontal Roadmap positioned ABOVE the form card */}
-        <div className="flex items-center justify-between w-full max-w-md mx-auto mb-6 px-2 text-[11px] font-bold text-brand-black select-none">
-          <div className="flex items-center gap-1.5">
-            <div className="w-5 h-5 rounded-full bg-brand-lime flex items-center justify-center text-brand-black text-[10px] font-extrabold">1</div>
-            <span className="text-brand-black">Register</span>
-          </div>
-          <div className="flex-1 border-t-2 border-dashed border-brand-grey-slate mx-3"></div>
-          <div className="flex items-center gap-1.5 opacity-60">
-            <div className="w-5 h-5 rounded-full border-2 border-brand-grey-slate flex items-center justify-center text-brand-grey-muted text-[10px] font-bold">2</div>
-            <span className="text-brand-grey-muted">Verify</span>
-          </div>
-          <div className="flex-1 border-t-2 border-dashed border-brand-grey-slate mx-3"></div>
-          <div className="flex items-center gap-1.5 opacity-60">
-            <div className="w-5 h-5 rounded-full border-2 border-brand-grey-slate flex items-center justify-center text-brand-grey-muted text-[10px] font-bold">3</div>
-            <span className="text-brand-grey-muted">Sign</span>
-          </div>
+    <div className="min-h-screen bg-[var(--background)] flex items-center justify-center px-4 py-12">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={spring}
+        className="w-full max-w-[420px]"
+      >
+        {/* Logo */}
+        <div className="mb-8 text-center">
+          <span className="text-[26px] font-semibold tracking-tight text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
+            OnboardPro
+          </span>
+          <p className="text-[13px] text-[var(--text-muted)] mt-1">Create your account</p>
         </div>
 
-        <div className="w-full max-w-md bg-brand-surface rounded-[16px] shadow-[0_4px_20px_rgba(18,18,18,0.06)] overflow-hidden border border-brand-grey-light">
-          {/* Progress Bar Top */}
-          <div className="h-1.5 w-full bg-brand-grey-light relative">
-            <div
-              className="absolute top-0 left-0 h-full bg-brand-lime transition-all duration-500 rounded-r-full"
-              style={{ width: progress.width }}
-            ></div>
-          </div>
-
-          <div className="p-8 lg:p-10">
-            <div className="mb-6">
-              <p className="text-[12px] font-medium text-brand-grey-muted uppercase tracking-wider mb-1">
-                {progress.stepLabel}
-              </p>
-              <h1 className="text-h2 font-bold text-brand-black text-[28px] leading-tight">
-                {progress.title}
-              </h1>
+        {/* Step progress */}
+        <div className="flex items-center justify-between mb-6 px-1">
+          {totalSteps.map((s, i) => (
+            <div key={s.label} className="flex items-center gap-2 flex-1">
+              <div className="flex flex-col items-center gap-1">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-all ${
+                  i < currentStepIndex ? 'bg-[var(--color-accent)] text-white' :
+                  i === currentStepIndex ? 'bg-[var(--foreground)] text-[var(--card-bg)]' :
+                  'bg-[var(--border-color)] text-[var(--text-faint)]'
+                }`}>{i + 1}</div>
+                <span className={`text-[10px] font-medium transition-colors ${
+                  i === currentStepIndex ? 'text-[var(--foreground)]' : 'text-[var(--text-faint)]'
+                }`}>{s.label}</span>
+              </div>
+              {i < totalSteps.length - 1 && (
+                <div className={`flex-1 h-px mb-4 transition-colors ${i < currentStepIndex ? 'bg-[var(--color-accent)]' : 'bg-[var(--border-color)]'}`} />
+              )}
             </div>
+          ))}
+        </div>
 
+        {/* Card */}
+        <div className="bg-[var(--card-bg)] rounded-[14px] p-7" style={{ boxShadow: 'var(--shadow-md)' }}>
+
+          {/* Alerts */}
+          <AnimatePresence mode="wait">
             {error && (
-              <div className="mb-6 p-4 bg-brand-pink-soft text-brand-black rounded-[8px] text-[14px]">
+              <motion.div key="err" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                className="mb-5 px-4 py-3 rounded-[8px] bg-red-50 border border-red-100 text-red-600 text-[13px]">
                 {error}
-              </div>
+              </motion.div>
             )}
-
             {otpSuccessMessage && (
-              <div className="mb-6 p-4 bg-green-50 text-green-800 border border-green-200 rounded-[8px] text-[14px]">
+              <motion.div key="suc" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                className="mb-5 px-4 py-3 rounded-[8px] bg-emerald-50 border border-emerald-100 text-emerald-700 text-[13px]">
                 {otpSuccessMessage}
-              </div>
+              </motion.div>
             )}
+          </AnimatePresence>
 
-            {step === 1 ? (
-              <form onSubmit={handleRegister} className="space-y-5">
-                {/* Section A: Personal Details */}
-                {regSection === 'A' && (
-                  <div className="space-y-4 animate-fadeIn">
-                    <div className="space-y-1">
-                      <label className="block text-[14px] font-medium text-brand-black" htmlFor="name">
-                        Full Name
-                      </label>
-                      <input
-                        type="text"
-                        name="name"
-                        id="name"
-                        value={form.name}
-                        onChange={handleChange}
-                        placeholder="Enter your full legal name"
-                        className="w-full h-11 px-4 rounded-full border border-brand-grey-slate bg-brand-surface text-brand-black focus:outline-none focus:ring-2 focus:ring-brand-lime focus:border-transparent transition-all placeholder:text-brand-grey-muted/50 text-[15px]"
-                        required
-                      />
-                    </div>
+          <AnimatePresence mode="wait">
 
-                    <div className="space-y-1">
-                      <label className="block text-[14px] font-medium text-brand-black" htmlFor="email">
-                        Work Email
-                      </label>
-                      <input
-                        type="email"
-                        name="email"
-                        id="email"
-                        value={form.email}
-                        onChange={handleChange}
-                        placeholder="you@company.com"
-                        className="w-full h-11 px-4 rounded-full border border-brand-grey-slate bg-brand-surface text-brand-black focus:outline-none focus:ring-2 focus:ring-brand-lime focus:border-transparent transition-all placeholder:text-brand-grey-muted/50 text-[15px]"
-                        required
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="block text-[14px] font-medium text-brand-black" htmlFor="dob">
-                          Birth Date
-                        </label>
-                        <input
-                          type="date"
-                          name="dob"
-                          id="dob"
-                          value={form.dob}
-                          onChange={handleChange}
-                          className="w-full h-11 px-4 rounded-full border border-brand-grey-slate bg-brand-surface text-brand-black focus:outline-none focus:ring-2 focus:ring-brand-lime focus:border-transparent transition-all text-[15px]"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[14px] font-medium text-brand-black" htmlFor="phone">
-                          Phone
-                        </label>
-                        <input
-                          type="text"
-                          name="phone"
-                          id="phone"
-                          value={form.phone}
-                          onChange={handleChange}
-                          placeholder="+1 (555) 000-0000"
-                          className="w-full h-11 px-4 rounded-full border border-brand-grey-slate bg-brand-surface text-brand-black focus:outline-none focus:ring-2 focus:ring-brand-lime focus:border-transparent transition-all placeholder:text-brand-grey-muted/50 text-[15px]"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleContinue}
-                      className="w-full h-12 bg-brand-black text-white rounded-full font-semibold text-[16px] hover:bg-brand-charcoal transition-all focus:outline-none focus:ring-2 focus:ring-brand-black mt-4"
-                    >
-                      Continue
-                    </button>
+            {/* ── Step 1 Personal ── */}
+            {step === 1 && regSection === 'A' && (
+              <motion.form key="personal" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={spring}
+                onSubmit={handleContinue} className="space-y-4">
+                <div>
+                  <label className={labelClass}>Full name</label>
+                  <input type="text" name="name" value={form.name} onChange={handleChange} placeholder="Jane Smith" required className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Work email</label>
+                  <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="you@company.com" required className={inputClass} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelClass}>Date of birth</label>
+                    <input type="date" name="dob" value={form.dob} onChange={handleChange} required className={inputClass} />
                   </div>
-                )}
-
-                {/* Section B: Security Details */}
-                {regSection === 'B' && (
-                  <div className="space-y-4 animate-fadeIn">
-                    <div className="space-y-1">
-                      <label className="block text-[14px] font-medium text-brand-black" htmlFor="invitationCode">
-                        Invitation Code
-                      </label>
-                      <input
-                        type="text"
-                        name="invitationCode"
-                        id="invitationCode"
-                        value={form.invitationCode}
-                        onChange={handleChange}
-                        placeholder="Enter 8-digit code"
-                        className="w-full h-11 px-4 rounded-full border border-brand-grey-slate bg-brand-surface text-brand-black focus:outline-none focus:ring-2 focus:ring-brand-lime focus:border-transparent transition-all placeholder:text-brand-grey-muted/50 text-[15px]"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[14px] font-medium text-brand-black" htmlFor="pass">
-                        Password
-                      </label>
-                      <input
-                        type="password"
-                        name="pass"
-                        id="pass"
-                        value={form.pass}
-                        onChange={handleChange}
-                        placeholder="••••••••"
-                        className="w-full h-11 px-4 rounded-full border border-brand-grey-slate bg-brand-surface text-brand-black focus:outline-none focus:ring-2 focus:ring-brand-lime focus:border-transparent transition-all placeholder:text-brand-grey-muted/50 text-[15px]"
-                        required
-                      />
-                      
-                      {form.pass && (
-                        <div className="space-y-1 mt-1.5">
-                          <div className="h-1.5 w-full bg-brand-grey-light rounded-full overflow-hidden">
-                            <div
-                              className={`h-full ${getStrengthColor()} transition-all duration-300`}
-                              style={{ width: `${(strength / 4) * 100}%` }}
-                            ></div>
-                          </div>
-                          <p className="text-[11px] text-brand-grey-muted">
-                            Password strength: {strength <= 1 ? 'Weak' : strength <= 3 ? 'Moderate' : 'Strong'}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full h-12 bg-brand-black text-white rounded-full font-semibold text-[16px] hover:bg-brand-charcoal transition-all focus:outline-none focus:ring-2 focus:ring-brand-black disabled:bg-brand-grey-light disabled:cursor-not-allowed mt-4"
-                    >
-                      {loading ? 'Submitting...' : 'Register'}
-                    </button>
-                  </div>
-                )}
-              </form>
-            ) : (
-              <form onSubmit={handleVerifyOtp} className="space-y-6">
-                <div className="space-y-3">
-                  <label className="block text-center text-[14px] font-medium text-brand-black">
-                    Enter the 6-Digit OTP Code
-                  </label>
-                  
-                  <div className="flex justify-between gap-2">
-                    {otpValues.map((val, idx) => (
-                      <input
-                        key={idx}
-                        id={`otp-${idx}`}
-                        type="text"
-                        maxLength={6}
-                        value={val}
-                        onChange={(e) => handleOtpChange(idx, e.target.value)}
-                        onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                        className="w-12 h-12 text-center text-[20px] font-bold border border-brand-grey-slate rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-lime bg-brand-surface text-brand-black"
-                      />
-                    ))}
+                  <div>
+                    <label className={labelClass}>Phone</label>
+                    <input type="tel" name="phone" value={form.phone} onChange={handleChange} placeholder="+1 555 000 0000" required className={inputClass} />
                   </div>
                 </div>
-
-                <button
-                  type="submit"
-                  disabled={loading || otp.length < 6}
-                  className="w-full h-12 bg-brand-black text-white rounded-full font-semibold text-[16px] hover:bg-brand-charcoal transition-all focus:outline-none focus:ring-2 focus:ring-brand-black disabled:bg-brand-grey-light disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Verifying...' : 'Verify & Setup Profile'}
+                <button type="submit" className="w-full h-10 mt-1 rounded-[8px] bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-[14px] font-semibold transition-all" style={{ fontFamily: 'var(--font-display)' }}>
+                  Continue
                 </button>
+              </motion.form>
+            )}
 
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={handleResendOtp}
-                    disabled={loading}
-                    className="text-[14px] font-bold text-brand-lime-olive hover:underline"
-                  >
-                    Resend OTP Code
+            {/* ── Step 2 Credentials ── */}
+            {step === 1 && regSection === 'B' && (
+              <motion.form key="credentials" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={spring}
+                onSubmit={handleRegister} className="space-y-4">
+                <div>
+                  <label className={labelClass}>Invitation code</label>
+                  <input type="text" name="invitationCode" value={form.invitationCode} onChange={handleChange} placeholder="e.g. INV-XXXX" required className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Password</label>
+                  <input type="password" name="pass" value={form.pass} onChange={handleChange} placeholder="Min. 8 characters" required className={inputClass} />
+                  {form.pass && (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex gap-1 h-1">
+                        {[1,2,3,4].map(i => (
+                          <div key={i} className={`flex-1 rounded-full transition-all duration-300 ${strength >= i ? strengthColor : 'bg-[var(--border-color)]'}`} />
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-[var(--text-muted)]">{strengthLabel} password</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={() => { setRegSection('A'); setError(''); }}
+                    className="h-10 px-4 rounded-[8px] border border-[var(--border-color)] text-[var(--foreground)] text-[14px] font-medium hover:bg-[var(--background)] transition-all flex items-center gap-1.5">
+                    <ArrowLeft className="w-3.5 h-3.5" /> Back
+                  </button>
+                  <button type="submit" disabled={loading}
+                    className="flex-1 h-10 rounded-[8px] bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-[14px] font-semibold transition-all disabled:opacity-60 flex items-center justify-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Registering…</> : 'Create account'}
                   </button>
                 </div>
-              </form>
+              </motion.form>
             )}
 
-            <div className="mt-6 text-center">
-              <p className="text-brand-grey-muted text-[14px]">
-                Already have an account?{' '}
-                <a href="/signin" className="text-brand-lime-olive font-bold hover:underline">
-                  Log in
-                </a>
-              </p>
-            </div>
-          </div>
+            {/* ── Step 3 OTP ── */}
+            {step === 2 && (
+              <motion.form key="otp" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={spring}
+                onSubmit={handleVerifyOtp} className="space-y-5">
+                <div className="text-center space-y-1 mb-2">
+                  <p className="text-[14px] font-medium text-[var(--foreground)]">Check your email</p>
+                  <p className="text-[13px] text-[var(--text-muted)]">We sent a 6-digit code to <span className="font-medium text-[var(--foreground)]">{email}</span></p>
+                </div>
+                <div className="flex justify-center gap-2">
+                  {otpValues.map((val, i) => (
+                    <input
+                      key={i}
+                      id={`otp-${i}`}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={val}
+                      onChange={(e) => handleOtpChange(i, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                      className="w-11 h-12 text-center text-[18px] font-bold rounded-[8px] border border-[var(--border-color)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] transition-all"
+                    />
+                  ))}
+                </div>
+                <button type="submit" disabled={loading || otp.length < 6}
+                  className="w-full h-10 rounded-[8px] bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-[14px] font-semibold transition-all disabled:opacity-60 flex items-center justify-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+                  {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Verifying…</> : 'Verify email'}
+                </button>
+                <p className="text-center text-[13px] text-[var(--text-muted)]">
+                  Didn&apos;t receive it?{' '}
+                  <button type="button" onClick={handleResendOtp} disabled={loading} className="text-[var(--foreground)] font-medium underline underline-offset-4 hover:text-[var(--color-accent)] transition-colors disabled:opacity-50">
+                    Resend code
+                  </button>
+                </p>
+              </motion.form>
+            )}
+
+          </AnimatePresence>
         </div>
-      </div>
+
+        <p className="text-center text-[13px] text-[var(--text-muted)] mt-6">
+          Already have an account?{' '}
+          <Link href="/signin" className="text-[var(--foreground)] font-medium underline underline-offset-4 hover:text-[var(--color-accent)] transition-colors">
+            Sign in
+          </Link>
+        </p>
+      </motion.div>
     </div>
   );
 }

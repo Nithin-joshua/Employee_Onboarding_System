@@ -4,6 +4,11 @@ import { useEffect, useState, use, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { request } from '../../../../lib/apiClient';
+import { 
+  ArrowLeft, FileText, User, Briefcase, 
+  FileCheck2, Clock, AlertTriangle, Loader2 
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function EmployeeDetail({ params: paramsPromise }) {
   const params = use(paramsPromise);
@@ -38,7 +43,7 @@ export default function EmployeeDetail({ params: paramsPromise }) {
     setActionLoading(true);
     setActionMessage(null);
     try {
-      const updated = await request(`/employees/${params.id}/approve-review`, {
+      await request(`/employees/${params.id}/approve-review`, {
         method: 'POST',
       }, session);
       setActionMessage({ text: 'Approved to Manager Review phase', type: 'success' });
@@ -142,47 +147,115 @@ export default function EmployeeDetail({ params: paramsPromise }) {
     }
   };
 
-  if (loading) return <div className="text-gray-500 p-4">Loading details...</div>;
-  if (error) return <div className="text-red-500 p-4">{error}</div>;
-  if (!employee) return <div className="text-gray-500 p-4">Employee not found</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
+        <Loader2 className="w-5 h-5 text-[var(--color-accent)] animate-spin" />
+        <p className="text-[var(--text-muted)] text-[14px]">Loading details...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-[8px] max-w-xl mx-auto mt-10">
+        {error}
+      </div>
+    );
+  }
+
+  if (!employee) {
+    return (
+      <div className="p-6 text-center text-[var(--text-muted)] mt-10">
+        Employee profile not found.
+      </div>
+    );
+  }
 
   const isHR = session?.user?.role === 'HR';
   const isManager = session?.user?.role === 'MANAGER';
 
+  const getStatusBadge = (status) => {
+    const map = {
+      ACTIVE:                 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+      DAY1_READY:             'bg-emerald-50 text-emerald-700 border border-emerald-100',
+      UNDER_REVIEW:           'bg-indigo-50 text-indigo-700 border border-indigo-100',
+      MANAGER_REVIEW:         'bg-violet-50 text-violet-700 border border-violet-100',
+      DOCUMENTS_PENDING:      'bg-amber-50 text-amber-700 border border-amber-100',
+      DOCUMENTS_SUBMITTED:    'bg-sky-50 text-sky-700 border border-sky-100',
+      PENDING_SIGNATURE:      'bg-amber-50 text-amber-700 border border-amber-100',
+      COMPLIANCE_PROCESSING:  'bg-sky-50 text-sky-700 border border-sky-100',
+      REJECTED:               'bg-red-50 text-red-700 border border-red-100',
+    };
+    return map[status] || 'bg-[var(--border-color)]/60 text-[var(--text-muted)] border border-transparent';
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <motion.div 
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+      className="space-y-6 max-w-5xl mx-auto"
+    >
+      {/* Header Panel */}
+      <div className="flex justify-between items-center border-b border-[var(--border-color)] pb-4">
         <div>
-          <h1 className="text-2xl font-bold">{employee.personal?.name}</h1>
-          <p className="text-gray-500 text-sm">Status: <span className="font-semibold text-blue-600">{employee.status}</span></p>
+          <h1 className="text-[24px] font-semibold tracking-tight text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>{employee.personal?.name}</h1>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-[12px] text-[var(--text-muted)]">Status:</span>
+            <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-[4px] ${getStatusBadge(employee.status)}`}>
+              {employee.status.replace(/_/g, ' ')}
+            </span>
+          </div>
           {employee.lastRejectionReason && (
-            <p className="text-red-500 text-xs font-semibold mt-1">Manager Rejection Reason: {employee.lastRejectionReason}</p>
+            <p className="text-[var(--text-muted)] text-xs font-semibold mt-2 flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5 text-[var(--color-accent)]" /> Rejection: {employee.lastRejectionReason}
+            </p>
           )}
         </div>
-        <button onClick={() => router.back()} className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 text-sm">
-          Back
+        <button 
+          onClick={() => router.back()} 
+          className="h-8 px-3 rounded-[8px] border border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--border-color)]/40 transition-all text-xs font-semibold flex items-center gap-1.5 bg-[var(--card-bg)]"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> Back
         </button>
       </div>
 
-      {actionMessage && (
-        <div className={`p-4 rounded border text-sm flex justify-between items-center ${
-          actionMessage.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
-        }`}>
-          <span>{actionMessage.text}</span>
-          <button onClick={() => setActionMessage(null)} className="font-bold hover:opacity-85 text-xs ml-3 uppercase">Dismiss</button>
-        </div>
-      )}
+      <AnimatePresence>
+        {actionMessage && (
+          <motion.div 
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className={`p-3.5 rounded-[8px] border text-xs flex justify-between items-center ${
+              actionMessage.type === 'success' 
+                ? 'bg-emerald-50 border-emerald-100 text-emerald-700' 
+                : 'bg-red-50 border-red-100 text-red-600'
+            }`}
+          >
+            <span>{actionMessage.text}</span>
+            <button 
+              onClick={() => setActionMessage(null)} 
+              className="font-bold hover:opacity-80 text-[10px] ml-3 uppercase text-[var(--color-accent)]"
+            >
+              Dismiss
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Manager Approval Panel */}
+      {/* 1. Manager Approval Panel */}
       {employee.status === 'MANAGER_REVIEW' && isManager && (
-        <div className="p-4 border border-blue-200 bg-blue-50 rounded space-y-4">
-          <h3 className="font-bold text-blue-900">Manager Final Approval Gate</h3>
-          <p className="text-xs text-blue-700">As the assigned Manager, please review the compliance details below and sign off on this hire.</p>
-          <div className="flex gap-2">
+        <div className="p-5 border border-[var(--color-accent)] bg-[var(--color-accent-soft)] rounded-[12px] space-y-3.5">
+          <h3 className="font-semibold text-[var(--color-accent)] text-[16px]" style={{ fontFamily: 'var(--font-display)' }}>Manager Final Approval Gate</h3>
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            As the assigned Manager, please review the compliance details below and sign off on this hire.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={handleApproveHire}
               disabled={actionLoading}
-              className="bg-green-600 text-white px-4 py-2 rounded text-xs hover:bg-green-700 disabled:bg-gray-400 font-bold"
+              className="bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white px-4 h-9 rounded-[8px] text-xs font-bold transition-all disabled:opacity-50"
             >
               Approve Hire & Finalize
             </button>
@@ -192,12 +265,12 @@ export default function EmployeeDetail({ params: paramsPromise }) {
                 placeholder="Reason for rejection"
                 value={managerRejectReason}
                 onChange={(e) => setManagerRejectReason(e.target.value)}
-                className="border p-2 rounded text-xs flex-1 bg-white"
+                className="border border-[var(--border-color)] px-3 h-9 rounded-[8px] text-xs flex-1 bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)]"
               />
               <button
                 onClick={handleRejectHire}
                 disabled={actionLoading}
-                className="bg-red-600 text-white px-4 py-2 rounded text-xs hover:bg-red-700 disabled:bg-gray-400 font-bold"
+                className="border border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--border-color)]/40 px-4 h-9 rounded-[8px] text-xs font-bold transition-all disabled:opacity-50 bg-[var(--card-bg)]"
               >
                 Reject Hire
               </button>
@@ -206,86 +279,98 @@ export default function EmployeeDetail({ params: paramsPromise }) {
         </div>
       )}
 
+      {/* 2. Personal Details + Job Details cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Personal Details */}
-        <div className="p-4 border rounded bg-white">
-          <h2 className="text-lg font-bold mb-3 border-b pb-2">Personal Details</h2>
-          <div className="space-y-2 text-sm">
-            <p><span className="font-semibold">Email:</span> {employee.personal?.email}</p>
-            <p><span className="font-semibold">Phone:</span> {employee.personal?.phone}</p>
-            <p><span className="font-semibold">DOB:</span> {employee.personal?.dob}</p>
+        <div className="p-5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[12px] shadow-sm card-lift" style={{ boxShadow: 'var(--shadow-sm)' }}>
+          <h2 className="text-[15px] font-semibold mb-4 border-b border-[var(--border-color)] pb-2 flex items-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+            <User className="w-4 h-4 text-[var(--text-muted)]" /> Personal Details
+          </h2>
+          <div className="space-y-3 text-[13px]">
+            <p className="flex justify-between"><span className="font-semibold text-[var(--text-muted)]">Email:</span> <span className="font-medium text-[var(--foreground)]">{employee.personal?.email}</span></p>
+            <p className="flex justify-between"><span className="font-semibold text-[var(--text-muted)]">Phone:</span> <span className="font-medium text-[var(--foreground)]">{employee.personal?.phone}</span></p>
+            <p className="flex justify-between"><span className="font-semibold text-[var(--text-muted)]">DOB:</span> <span className="font-medium text-[var(--foreground)]">{employee.personal?.dob}</span></p>
           </div>
         </div>
 
         {/* Job Details */}
-        <div className="p-4 border rounded bg-white">
-          <h2 className="text-lg font-bold mb-3 border-b pb-2">Job Details</h2>
-          <div className="space-y-2 text-sm">
-            <p><span className="font-semibold">Title:</span> {employee.job?.title}</p>
-            <p><span className="font-semibold">Department:</span> {employee.job?.department}</p>
-            <p><span className="font-semibold">Manager ID:</span> {employee.job?.managerId}</p>
-            <p><span className="font-semibold">Salary:</span> {employee.job?.salary}</p>
-            <p><span className="font-semibold">Joining Date:</span> {employee.job?.joiningDate}</p>
+        <div className="p-5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[12px] shadow-sm card-lift" style={{ boxShadow: 'var(--shadow-sm)' }}>
+          <h2 className="text-[15px] font-semibold mb-4 border-b border-[var(--border-color)] pb-2 flex items-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+            <Briefcase className="w-4 h-4 text-[var(--text-muted)]" /> Job Details
+          </h2>
+          <div className="space-y-3 text-[13px]">
+            <p className="flex justify-between"><span className="font-semibold text-[var(--text-muted)]">Title:</span> <span className="font-medium text-[var(--foreground)]">{employee.job?.title}</span></p>
+            <p className="flex justify-between"><span className="font-semibold text-[var(--text-muted)]">Department:</span> <span className="font-medium text-[var(--foreground)]">{employee.job?.department}</span></p>
+            <p className="flex justify-between"><span className="font-semibold text-[var(--text-muted)]">Manager ID:</span> <span className="font-mono text-[11px] text-[var(--text-muted)]">{employee.job?.managerId}</span></p>
+            <p className="flex justify-between"><span className="font-semibold text-[var(--text-muted)]">Salary:</span> <span className="font-semibold text-[var(--color-accent)]">${employee.job?.salary?.toLocaleString()}</span></p>
+            <p className="flex justify-between"><span className="font-semibold text-[var(--text-muted)]">Joining Date:</span> <span className="font-medium text-[var(--foreground)]">{employee.job?.joiningDate}</span></p>
           </div>
         </div>
       </div>
 
-      {/* Documents review */}
-      <div className="p-4 border rounded bg-white">
-        <div className="flex justify-between items-center mb-3 border-b pb-2">
-          <h2 className="text-lg font-bold">Documents</h2>
+      {/* 3. Documents review list */}
+      <div className="p-5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[12px] shadow-sm card-lift" style={{ boxShadow: 'var(--shadow-sm)' }}>
+        <div className="flex justify-between items-center mb-4 border-b border-[var(--border-color)] pb-3">
+          <h2 className="text-[15px] font-semibold flex items-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+            <FileText className="w-4 h-4 text-[var(--text-muted)]" /> Documents
+          </h2>
           {isHR && employee.status === 'UNDER_REVIEW' && (
             <button
               onClick={handleApproveReview}
               disabled={actionLoading}
-              className="bg-blue-500 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600 disabled:bg-gray-400 font-semibold"
+              className="bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white px-3.5 h-8 rounded-[8px] text-xs font-semibold transition-all disabled:opacity-50"
             >
-              Approve Review (Compliance phase next)
+              Approve Review
             </button>
           )}
         </div>
 
         {employee.documents?.length === 0 ? (
-          <p className="text-gray-500 text-sm">No documents uploaded</p>
+          <p className="text-[var(--text-muted)] text-[13px]">No documents uploaded</p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {employee.documents?.map((doc) => (
-              <div key={doc.id} className="p-3 border rounded bg-gray-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
-                <div>
-                  <p className="font-semibold text-sm">{doc.type}</p>
-                  <p className="text-xs text-gray-500">Status: <span className="font-medium">{doc.status}</span></p>
+              <div key={doc.id} className="p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-[8px] flex flex-col md:flex-row justify-between items-start md:items-center gap-3.5 hover:border-[var(--color-accent)]/20 transition-all">
+                <div className="space-y-1">
+                  <p className="font-semibold text-[14px] text-[var(--foreground)]">{doc.type.replace(/_/g, ' ')}</p>
+                  <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-2">
+                    <span>Status:</span> 
+                    <span className={`px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold border ${getStatusBadge(doc.status)}`}>{doc.status}</span>
+                  </p>
                   {doc.storagePath && (
-                    <p className="text-xs text-blue-500 font-mono mt-1 overflow-hidden overflow-ellipsis max-w-xs">{doc.storagePath}</p>
+                    <p className="text-[11px] text-[var(--text-muted)] font-mono overflow-hidden overflow-ellipsis max-w-xs">{doc.storagePath}</p>
                   )}
                   {doc.rejectionReason && (
-                    <p className="text-xs text-red-500 mt-1 font-semibold">Rejected reason: {doc.rejectionReason}</p>
+                    <p className="text-[12px] text-red-600 font-medium bg-red-50 border border-red-100 px-2.5 py-1 rounded-[6px] mt-1.5">
+                      Rejected: {doc.rejectionReason}
+                    </p>
                   )}
                 </div>
 
                 {isHR && employee.status === 'UNDER_REVIEW' && (
-                  <div className="flex gap-2 items-center text-xs">
+                  <div className="flex flex-wrap gap-2 items-center text-xs">
                     {doc.status !== 'VERIFIED' && (
                       <button
                         onClick={() => handleVerifyDoc(doc.id)}
                         disabled={actionLoading}
-                        className="bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 disabled:bg-gray-400"
+                        className="bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white px-3.5 h-7 rounded-[8px] font-semibold transition-all"
                       >
                         Verify
                       </button>
                     )}
                     {doc.status !== 'REJECTED' && (
-                      <div className="flex gap-1">
+                      <div className="flex gap-1.5">
                         <input
                           type="text"
                           placeholder="Rejection reason"
                           value={rejectionReason[doc.id] || ''}
                           onChange={(e) => setRejectionReason({ ...rejectionReason, [doc.id]: e.target.value })}
-                          className="border p-1 rounded max-w-[150px]"
+                          className="border border-[var(--border-color)] px-3 h-7 rounded-[8px] max-w-[150px] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--border-color)] text-xs"
                         />
                         <button
                           onClick={() => handleRejectDoc(doc.id)}
                           disabled={actionLoading}
-                          className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 disabled:bg-gray-400"
+                          className="border border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--border-color)]/40 px-3.5 h-7 rounded-[8px] font-semibold transition-all bg-[var(--card-bg)]"
                         >
                           Reject
                         </button>
@@ -299,21 +384,27 @@ export default function EmployeeDetail({ params: paramsPromise }) {
         )}
       </div>
 
-      {/* Compliance Forms */}
-      <div className="p-4 border rounded bg-white">
-        <h2 className="text-lg font-bold mb-3 border-b pb-2">Compliance Forms</h2>
+      {/* 4. Compliance Forms list */}
+      <div className="p-5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[12px] shadow-sm card-lift" style={{ boxShadow: 'var(--shadow-sm)' }}>
+        <h2 className="text-[15px] font-semibold mb-4 border-b border-[var(--border-color)] pb-3 flex items-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+          <FileCheck2 className="w-4 h-4 text-[var(--text-muted)]" /> Compliance Forms
+        </h2>
         {employee.complianceForms?.length === 0 ? (
-          <p className="text-gray-500 text-sm">No compliance forms generated</p>
+          <p className="text-[var(--text-muted)] text-[13px]">No compliance forms generated</p>
         ) : (
-          <div className="space-y-3">
-            {employee.complianceForms?.map((form) => (
-              <div key={form.id} className="p-3 border rounded bg-gray-50 flex justify-between items-center text-sm">
+          <div className="space-y-2">
+            {employee.complianceForms?.map((cf) => (
+              <div key={cf.id} className="p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-[8px] flex justify-between items-center text-[13px]">
                 <div>
-                  <p className="font-semibold">{form.type}</p>
-                  <p className="text-xs text-gray-500">Deadline: {form.deadline}</p>
+                  <p className="font-semibold text-[var(--foreground)]">{cf.type}</p>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Deadline: {cf.deadline}</p>
                 </div>
-                <span className={`px-2 py-1 text-xs font-semibold rounded ${form.status === 'SIGNED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                  {form.status}
+                <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-[4px] uppercase border ${
+                  cf.status === 'SIGNED' 
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                    : 'bg-[var(--border-color)]/60 text-[var(--text-muted)] border-transparent'
+                }`}>
+                  {cf.status}
                 </span>
               </div>
             ))}
@@ -321,34 +412,40 @@ export default function EmployeeDetail({ params: paramsPromise }) {
         )}
       </div>
 
-      {/* Milestones checklist */}
-      <div className="p-4 border rounded bg-white">
-        <h2 className="text-lg font-bold mb-3 border-b pb-2">Milestones & Checklist</h2>
+      {/* 5. Milestones & Checklist list */}
+      <div className="p-5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[12px] shadow-sm card-lift" style={{ boxShadow: 'var(--shadow-sm)' }}>
+        <h2 className="text-[15px] font-semibold mb-4 border-b border-[var(--border-color)] pb-3 flex items-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+          <Clock className="w-4 h-4 text-[var(--text-muted)]" /> Milestones & Checklist
+        </h2>
         {employee.milestones?.length === 0 ? (
-          <p className="text-gray-500 text-sm">No milestones assigned</p>
+          <p className="text-[var(--text-muted)] text-[13px]">No milestones assigned</p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {employee.milestones?.map((ms) => (
-              <div key={ms.id} className="p-3 border rounded bg-gray-50 flex justify-between items-center text-sm">
+              <div key={ms.id} className="p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-[8px] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 text-[13px]">
                 <div>
-                  <p className="font-semibold">Milestone {ms.type}</p>
-                  <p className="text-xs text-gray-500">Due Date: {ms.dueDate}</p>
-                  <div className="mt-2 pl-2 border-l-2 text-xs text-gray-600">
-                    <p className="font-medium mb-1">Checklist:</p>
+                  <p className="font-semibold text-[14px] text-[var(--foreground)]">Milestone {ms.type}</p>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Due Date: {ms.dueDate}</p>
+                  <div className="mt-2.5 pl-2.5 border-l border-[var(--border-color)] text-[12px] text-[var(--text-muted)] space-y-1">
+                    <p className="font-bold text-[var(--foreground)] mb-0.5">Checklist:</p>
                     {ms.checklist?.map((item, idx) => (
                       <p key={idx}>- {item}</p>
                     ))}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`px-2 py-1 text-xs font-semibold rounded ${ms.status === 'DONE' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+                  <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-[4px] uppercase border ${
+                    ms.status === 'DONE' 
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                      : 'bg-[var(--border-color)]/60 text-[var(--text-muted)] border-transparent'
+                  }`}>
                     {ms.status}
                   </span>
                   {(isHR || isManager) && ms.status === 'PENDING' && (
                     <button
                       onClick={() => handleCompleteMilestone(ms.id)}
                       disabled={actionLoading}
-                      className="bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600 disabled:bg-gray-400"
+                      className="bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white px-3 h-7 rounded-[8px] text-xs font-semibold transition-all"
                     >
                       Complete
                     </button>
@@ -359,6 +456,6 @@ export default function EmployeeDetail({ params: paramsPromise }) {
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
