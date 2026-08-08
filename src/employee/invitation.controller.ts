@@ -1,22 +1,22 @@
 import { Controller, Post, Body } from '@nestjs/common';
 import { DbService } from '../db/db.service';
 import { Roles } from '../auth/roles.decorator';
+import { CreateInvitationDto } from './dto/create-invitation.dto';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Employee')
+@ApiBearerAuth()
 @Controller('invitations')
 export class InvitationController {
   constructor(private readonly db: DbService) {}
 
   @Roles('HR')
+  @ApiOperation({ summary: 'Create onboarding invitation code' })
+  @ApiResponse({ status: 201, description: 'Invitation code generated successfully.' })
   @Post()
   async createInvitation(
     @Body()
-    dto: {
-      jobTitle: string;
-      department: string;
-      managerId: string;
-      salary: number;
-      joiningDate: string;
-    },
+    dto: CreateInvitationDto,
   ) {
     // Generate an 8-character random alphanumeric invitation code
     const code = Math.random().toString(36).substring(2, 10).toUpperCase();

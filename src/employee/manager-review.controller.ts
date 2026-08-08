@@ -1,19 +1,32 @@
 import { Controller, Post, Body, Param, Req, ForbiddenException, ConflictException } from '@nestjs/common';
 import { DbService } from '../db/db.service';
+import { AuditLogService } from '../db/audit-log.service';
 import { Roles } from '../auth/roles.decorator';
 import { ComplianceService } from '../compliance/compliance.service';
 import { EmailService } from '../email/email.service';
 import { mapEmployee } from './employee.service';
+import { OutboxService } from './outbox.service';
+import { RejectHireDto } from './dto/reject-hire.dto';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 
+@ApiTags('Employee')
+@ApiBearerAuth()
 @Controller('employees/:employeeId')
 export class ManagerReviewController {
   constructor(
     private readonly db: DbService,
     private readonly complianceService: ComplianceService,
     private readonly emailService: EmailService,
+    private readonly outboxService: OutboxService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   @Roles('MANAGER')
+  @ApiOperation({ summary: 'Approve an employee hire (Manager review)' })
+  @ApiParam({ name: 'employeeId', description: 'Employee ID' })
+  @ApiResponse({ status: 200, description: 'Employee hire approved successfully.' })
+  @ApiResponse({ status: 400, description: 'Invalid status transition or validation failure.' })
+  @ApiResponse({ status: 403, description: 'Access forbidden / Not the assigned manager.' })
   @Post('approve-hire')
   async approveHire(@Param('employeeId') employeeId: string, @Req() req: any) {
     const employee = await this.db.employee.findUnique({
@@ -36,41 +49,50 @@ export class ManagerReviewController {
       throw new ConflictException(`Cannot approve hire. Employee status is ${employee.status}`);
     }
 
-    // Transition: MANAGER_REVIEW -> COMPLIANCE_PROCESSING
-    const updated = await this.db.employee.update({
-      where: { id: employeeId },
-      data: {
-        status: 'COMPLIANCE_PROCESSING',
-      },
-      include: { documents: true, complianceForms: true, milestones: true },
-    });
+    // Transition: MANAGER_REVIEW -> COMPLIANCE_PROCESSING inside a transaction with OutboxEvent
+    const updated = await this.db.$transaction(async (tx) => {
+      const emp = await tx.employee.update({
+        where: { id: employeeId },
+        data: {
+          status: 'COMPLIANCE_PROCESSING',
+        },
+        include: { documents: true, complianceForms: true, milestones: true },
+      });
 
-    await this.db.auditLog.create({
-      data: {
+      await this.auditLogService.createLog({
         employeeId,
         fromStatus: employee.status,
         toStatus: 'COMPLIANCE_PROCESSING',
         actorId: managerId,
         actorRole: 'MANAGER',
         note: 'Manager approved employee documents and details',
-      },
+      }, tx);
+
+      const personal = employee.personal as any;
+      await this.outboxService.createAndEmitEvent(tx, 'employee.status_changed', {
+        employeeId,
+        fromStatus: employee.status,
+        toStatus: 'COMPLIANCE_PROCESSING',
+        email: personal.email,
+        name: personal.name,
+      });
+
+      return emp;
     });
-
-    // Auto-generate compliance forms
-    await this.complianceService.generateForms(employeeId);
-
-    // Send hire-confirmation email via Brevo EmailService
-    const personal = employee.personal as any;
-    await this.emailService.sendHireConfirmation(personal.email, personal.name);
 
     return mapEmployee(updated);
   }
 
   @Roles('MANAGER')
+  @ApiOperation({ summary: 'Reject an employee hire (Manager review)' })
+  @ApiParam({ name: 'employeeId', description: 'Employee ID' })
+  @ApiResponse({ status: 200, description: 'Employee hire rejected successfully.' })
+  @ApiResponse({ status: 400, description: 'Invalid status transition or validation failure.' })
+  @ApiResponse({ status: 403, description: 'Access forbidden / Not the assigned manager.' })
   @Post('reject-hire')
   async rejectHire(
     @Param('employeeId') employeeId: string,
-    @Body() dto: { reason: string },
+    @Body() dto: RejectHireDto,
     @Req() req: any,
   ) {
     const employee = await this.db.employee.findUnique({
@@ -103,15 +125,13 @@ export class ManagerReviewController {
       include: { documents: true, complianceForms: true, milestones: true },
     });
 
-    await this.db.auditLog.create({
-      data: {
-        employeeId,
-        fromStatus: employee.status,
-        toStatus: 'UNDER_REVIEW',
-        actorId: managerId,
-        actorRole: 'MANAGER',
-        note: `Manager rejected hire. Reason: ${dto.reason}`,
-      },
+    await this.auditLogService.createLog({
+      employeeId,
+      fromStatus: employee.status,
+      toStatus: 'UNDER_REVIEW',
+      actorId: managerId,
+      actorRole: 'MANAGER',
+      note: `Manager rejected hire. Reason: ${dto.reason}`,
     });
 
     return mapEmployee(updated);

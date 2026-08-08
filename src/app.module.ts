@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DbModule } from './db/db.module';
@@ -11,9 +12,20 @@ import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { EmailModule } from './email/email.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
-  imports: [DbModule, EmployeeModule, DocumentModule, ComplianceModule, MilestoneModule, AuthModule, EmailModule],
+  imports: [
+    EventEmitterModule.forRoot(),
+    DbModule,
+    EmployeeModule,
+    DocumentModule,
+    ComplianceModule,
+    MilestoneModule,
+    AuthModule,
+    EmailModule,
+    HealthModule,
+  ],
   controllers: [AppController],
   providers: [
     AppService,

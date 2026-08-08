@@ -115,6 +115,8 @@ model ComplianceForm {
   status     ComplianceFormStatus
   deadline   DateTime
   data       Json
+
+  @@unique([employeeId, type])
 }
 
 model Milestone {
@@ -148,14 +150,43 @@ model OtpCode {
 }
 
 model AuditLog {
-  id         String         @id @default(uuid())
-  employeeId String
-  fromStatus EmployeeStatus
-  toStatus   EmployeeStatus
-  actorId    String
-  actorRole  Role
-  timestamp  DateTime       @default(now())
-  note       String?
+  id           String         @id @default(uuid())
+  employeeId   String
+  fromStatus   EmployeeStatus
+  toStatus     EmployeeStatus
+  actorId      String
+  actorRole    Role
+  timestamp    DateTime       @default(now())
+  note         String?
+  previousHash String         @default("0")
+  currentHash  String
 }
 
+model ComplianceRule {
+  id          String   @id @default(uuid())
+  ruleKey     String   @unique
+  ruleName    String
+  threshold   Float
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
 
+model AsyncJob {
+  id        String   @id @default(uuid())
+  type      String
+  payload   Json
+  status    String   // PENDING, PROCESSING, COMPLETED, FAILED
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OutboxEvent {
+  id        String   @id @default(uuid())
+  eventType String
+  payload   Json
+  processed Boolean  @default(false)
+  createdAt DateTime @default(now())
+}

@@ -59,7 +59,7 @@ describe('Employee Onboarding Workflow (e2e)', () => {
     await db.user.createMany({
       data: [
         { email: 'hr@example.com', passwordHash: hashedPw, role: 'HR' },
-        { email: 'manager@example.com', passwordHash: hashedPw, role: 'MANAGER' },
+        { email: 'manager@example.com', passwordHash: hashedPw, role: 'MANAGER', employeeId: 'mgr_123' },
         { email: 'alice@example.com', passwordHash: hashedPw, role: 'NEW_HIRE', employeeId: 'emp_low_salary' },
         { email: 'bob@example.com', passwordHash: hashedPw, role: 'NEW_HIRE', employeeId: 'emp_high_salary' },
       ],
@@ -153,10 +153,18 @@ describe('Employee Onboarding Workflow (e2e)', () => {
         .expect(201);
     }
 
-    // Transition 4: UNDER_REVIEW -> COMPLIANCE_PROCESSING (approveReview)
+    // Transition 4: UNDER_REVIEW -> MANAGER_REVIEW (approveReview)
     res = await request(app.getHttpServer())
       .post(`/employees/${empId}/approve-review`)
       .set('Authorization', `Bearer ${hrToken}`)
+      .send()
+      .expect(201);
+    expect(res.body.status).toBe('MANAGER_REVIEW');
+
+    // Transition 4.5: MANAGER_REVIEW -> COMPLIANCE_PROCESSING (approveHire)
+    res = await request(app.getHttpServer())
+      .post(`/employees/${empId}/approve-hire`)
+      .set('Authorization', `Bearer ${managerToken}`)
       .send()
       .expect(201);
     expect(res.body.status).toBe('COMPLIANCE_PROCESSING');

@@ -1,10 +1,15 @@
 import { Injectable, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DbService } from '../db/db.service';
+import { AuditLogService } from '../db/audit-log.service';
 import { Document, Employee } from '../interfaces/types.interface';
 import { MockOcrService } from './ocr.service';
 import { StorageService } from './storage.service';
 import { ComplianceService } from '../compliance/compliance.service';
 import { mapEmployee } from '../employee/employee.service';
+import { LocalVaultService } from '../common/services/local-vault.service';
+import { DocumentParserService } from '../employee/document-parser.service';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 const REQUIRED_DOC_TYPES = ['AADHAAR', 'PAN', 'EDUCATION', 'RELIEVING_LETTER', 'BANK_PROOF', 'PHOTO'];
 
@@ -15,6 +20,9 @@ export class DocumentService {
     private readonly ocrService: MockOcrService,
     private readonly storageService: StorageService,
     private readonly complianceService: ComplianceService,
+    private readonly localVaultService: LocalVaultService,
+    private readonly documentParserService: DocumentParserService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   private async getEmployeeOrThrow(id: string): Promise<Employee> {
@@ -92,15 +100,13 @@ export class DocumentService {
       },
     });
 
-    await this.db.auditLog.create({
-      data: {
-        employeeId,
-        fromStatus: employee.status,
-        toStatus: 'DOCUMENTS_SUBMITTED',
-        actorId: employeeId,
-        actorRole: 'NEW_HIRE',
-        note: 'All required documents submitted by candidate',
-      },
+    await this.auditLogService.createLog({
+      employeeId,
+      fromStatus: employee.status,
+      toStatus: 'DOCUMENTS_SUBMITTED',
+      actorId: employeeId,
+      actorRole: 'NEW_HIRE',
+      note: 'All required documents submitted by candidate',
     });
 
     return mapEmployee(updated);
@@ -121,10 +127,40 @@ export class DocumentService {
     for (const doc of docs) {
       // In case storagePath isn't populated (e.g. from custom workflow), assign fallback
       const storagePath = doc.storagePath || `${employeeId}/${doc.type}.pdf`;
-      const result = await this.ocrService.extract({
-        ...doc,
-        storagePath,
-      } as any);
+      
+      let result: { fields: Record<string, any>; confidence: number };
+      
+      if (storagePath.startsWith('uploads/')) {
+        try {
+          const absolutePath = path.join(process.cwd(), storagePath);
+          const packed = await fs.readFile(absolutePath);
+          const { encryptedData, iv, authTag } = this.localVaultService.unpack(packed);
+          const decryptedStream = this.localVaultService.decryptBuffer(encryptedData, iv, authTag);
+          
+          // Read Stream into Buffer
+          const chunks: any[] = [];
+          for await (const chunk of decryptedStream) {
+            chunks.push(chunk);
+          }
+          const decryptedBuffer = Buffer.concat(chunks);
+          
+          const fields = await this.documentParserService.extractPdfMetadata(decryptedBuffer);
+          result = {
+            fields,
+            confidence: fields.confidence ?? 1.0,
+          };
+        } catch (err) {
+          result = {
+            fields: { error: `Failed to decrypt/parse local file: ${err.message}` },
+            confidence: 0.0,
+          };
+        }
+      } else {
+        result = await this.ocrService.extract({
+          ...doc,
+          storagePath,
+        } as any);
+      }
 
       await this.db.document.update({
         where: { id: doc.id },
@@ -148,15 +184,13 @@ export class DocumentService {
       },
     });
 
-    await this.db.auditLog.create({
-      data: {
-        employeeId,
-        fromStatus: employee.status,
-        toStatus: 'UNDER_REVIEW',
-        actorId: 'SYSTEM',
-        actorRole: 'SYSTEM',
-        note: 'OCR document data extraction completed',
-      },
+    await this.auditLogService.createLog({
+      employeeId,
+      fromStatus: employee.status,
+      toStatus: 'UNDER_REVIEW',
+      actorId: 'SYSTEM',
+      actorRole: 'SYSTEM',
+      note: 'OCR document data extraction completed',
     });
 
     return mapEmployee(updated);
@@ -227,15 +261,13 @@ export class DocumentService {
       },
     });
 
-    await this.db.auditLog.create({
-      data: {
-        employeeId,
-        fromStatus: employee.status,
-        toStatus: 'DOCUMENTS_PENDING',
-        actorId: role,
-        actorRole: role as any,
-        note: `Document rejected: ${doc.type}. Reason: ${reason}`,
-      },
+    await this.auditLogService.createLog({
+      employeeId,
+      fromStatus: employee.status,
+      toStatus: 'DOCUMENTS_PENDING',
+      actorId: role,
+      actorRole: role as any,
+      note: `Document rejected: ${doc.type}. Reason: ${reason}`,
     });
 
     return mapEmployee(updated);
@@ -271,15 +303,13 @@ export class DocumentService {
       },
     });
 
-    await this.db.auditLog.create({
-      data: {
-        employeeId,
-        fromStatus: employee.status,
-        toStatus: 'MANAGER_REVIEW',
-        actorId: role,
-        actorRole: role as any,
-        note: 'HR approved all documents, routing to manager for review',
-      },
+    await this.auditLogService.createLog({
+      employeeId,
+      fromStatus: employee.status,
+      toStatus: 'MANAGER_REVIEW',
+      actorId: role,
+      actorRole: role as any,
+      note: 'HR approved all documents, routing to manager for review',
     });
 
     return this.getEmployeeOrThrow(employeeId);
@@ -352,8 +382,21 @@ export class DocumentService {
   ): Promise<Document> {
     const employee = await this.getEmployeeOrThrow(employeeId);
 
-    // Upload to Supabase Storage
-    const storagePath = await this.storageService.uploadDocument(employeeId, docType, buffer, mimeType);
+    // Save to local vault
+    const { encryptedData, iv, authTag } = this.localVaultService.encryptBuffer(buffer);
+    const packed = this.localVaultService.pack(encryptedData, iv, authTag);
+
+    const ext = 'enc';
+    const dir = path.join(process.cwd(), 'uploads', employeeId);
+    const filePath = path.join(dir, `${docType.toUpperCase()}.${ext}`);
+
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(filePath, packed);
+
+    const storagePath = `uploads/${employeeId}/${docType.toUpperCase()}.${ext}`;
+
+    // Auto-extract metadata
+    const extracted = await this.documentParserService.extractPdfMetadata(buffer);
 
     // Check if Document record already exists for this type
     let doc = await this.db.document.findFirst({
@@ -366,7 +409,7 @@ export class DocumentService {
         data: {
           status: 'SUBMITTED',
           storagePath,
-          extracted: undefined,
+          extracted: extracted as any,
           reviewedBy: null,
           rejectionReason: null,
         },
@@ -379,7 +422,7 @@ export class DocumentService {
           type: docType as any,
           status: 'SUBMITTED',
           storagePath,
-          extracted: undefined,
+          extracted: extracted as any,
           reviewedBy: null,
           rejectionReason: null,
         },

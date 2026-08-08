@@ -1,12 +1,16 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from './roles.decorator';
+import { DbService } from '../db/db.service';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(
+    private reflector: Reflector,
+    private db: DbService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -14,7 +18,8 @@ export class RolesGuard implements CanActivate {
     if (!requiredRoles) {
       return true;
     }
-    const { user } = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest();
+    const { user } = request;
     if (!user || !user.role) {
       throw new ForbiddenException('No user role found in request context');
     }
@@ -24,6 +29,24 @@ export class RolesGuard implements CanActivate {
     if (!hasRole) {
       throw new ForbiddenException(`Role ${user.role} is not authorized for this action`);
     }
+
+    // ABAC Guard: If user is a MANAGER, enforce manager ownership on employee records
+    if (user.role === 'MANAGER') {
+      const employeeId = request.params.employeeId || request.params.id;
+      if (employeeId) {
+        const employee = await this.db.employee.findUnique({
+          where: { id: employeeId },
+        });
+        if (employee) {
+          const job = employee.job as any;
+          const managerId = user.employeeId || user.userId;
+          if (job?.managerId !== managerId) {
+            throw new ForbiddenException('Only the assigned manager can perform actions on this employee record');
+          }
+        }
+      }
+    }
+
     return true;
   }
 }

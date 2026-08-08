@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DbService } from '../db/db.service';
+import { AuditLogService } from '../db/audit-log.service';
 import * as bcrypt from 'bcrypt';
 import { EmailService } from '../email/email.service';
 
@@ -10,6 +11,7 @@ export class AuthService {
     private readonly db: DbService,
     private readonly jwtService: JwtService,
     private readonly emailService: EmailService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async registerCandidate(dto: {
@@ -67,15 +69,13 @@ export class AuthService {
       },
     });
 
-    await this.db.auditLog.create({
-      data: {
-        employeeId: employeeId,
-        fromStatus: 'REGISTERED',
-        toStatus: 'REGISTERED',
-        actorId: user.id,
-        actorRole: 'NEW_HIRE',
-        note: 'Candidate registered via invitation code',
-      },
+    await this.auditLogService.createLog({
+      employeeId: employeeId,
+      fromStatus: 'REGISTERED',
+      toStatus: 'REGISTERED',
+      actorId: user.id,
+      actorRole: 'NEW_HIRE',
+      note: 'Candidate registered via invitation code',
     });
 
     // Generate 6-digit OTP
@@ -130,15 +130,13 @@ export class AuthService {
           data: { status: 'DOCUMENTS_PENDING' },
         });
 
-        await this.db.auditLog.create({
-          data: {
-            employeeId: user.employeeId,
-            fromStatus: 'REGISTERED',
-            toStatus: 'DOCUMENTS_PENDING',
-            actorId: user.id,
-            actorRole: 'NEW_HIRE',
-            note: 'OTP verified, candidate preboarding active',
-          },
+        await this.auditLogService.createLog({
+          employeeId: user.employeeId,
+          fromStatus: 'REGISTERED',
+          toStatus: 'DOCUMENTS_PENDING',
+          actorId: user.id,
+          actorRole: 'NEW_HIRE',
+          note: 'OTP verified, candidate preboarding active',
         });
 
         // Mark Invitation Code used

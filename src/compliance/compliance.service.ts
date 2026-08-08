@@ -1,8 +1,9 @@
 import { Injectable, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DbService } from '../db/db.service';
+import { AuditLogService } from '../db/audit-log.service';
 import { Employee, ComplianceForm } from '../interfaces/types.interface';
 import { MilestoneService } from '../milestone/milestone.service';
-import { mapEmployee } from '../employee/employee.service';
+import { mapEmployee, EmployeeService } from '../employee/employee.service';
 
 export function computeComplianceLogic(employee: Employee): { pfApplicable: boolean; esiApplicable: boolean } {
   const pfApplicable = true; // assume org >=20 employees
@@ -26,6 +27,8 @@ export class ComplianceService {
   constructor(
     private readonly db: DbService,
     private readonly milestoneService: MilestoneService,
+    private readonly employeeService: EmployeeService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   private async getEmployeeOrThrow(id: string): Promise<Employee> {
@@ -58,50 +61,7 @@ export class ComplianceService {
 
   // Called on entry to COMPLIANCE_PROCESSING
   async generateForms(employeeId: string): Promise<void> {
-    const employee = await this.getEmployeeOrThrow(employeeId);
-
-    // Clear any existing compliance forms for this employee
-    await this.db.complianceForm.deleteMany({
-      where: { employeeId },
-    });
-
-    const { pfApplicable, esiApplicable } = computeComplianceLogic(employee);
-
-    if (pfApplicable) {
-      await this.db.complianceForm.create({
-        data: {
-          id: Math.random().toString(36).substring(7),
-          employeeId,
-          type: 'PF_FORM11',
-          status: 'PENDING_GENERATION',
-          deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          data: {},
-        },
-      });
-      await this.db.complianceForm.create({
-        data: {
-          id: Math.random().toString(36).substring(7),
-          employeeId,
-          type: 'PF_FORM2',
-          status: 'PENDING_GENERATION',
-          deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          data: {},
-        },
-      });
-    }
-
-    if (esiApplicable) {
-      await this.db.complianceForm.create({
-        data: {
-          id: Math.random().toString(36).substring(7),
-          employeeId,
-          type: 'ESI_FORM1',
-          status: 'PENDING_GENERATION',
-          deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          data: {},
-        },
-      });
-    }
+    await this.employeeService.generateComplianceForms(employeeId);
   }
 
   // COMPLIANCE_PROCESSING -> PENDING_SIGNATURE
@@ -138,15 +98,13 @@ export class ComplianceService {
       },
     });
 
-    await this.db.auditLog.create({
-      data: {
-        employeeId,
-        fromStatus: employee.status,
-        toStatus: 'PENDING_SIGNATURE',
-        actorId: 'SYSTEM',
-        actorRole: 'SYSTEM',
-        note: 'Compliance forms generated and ready for signature',
-      },
+    await this.auditLogService.createLog({
+      employeeId,
+      fromStatus: employee.status,
+      toStatus: 'PENDING_SIGNATURE',
+      actorId: 'SYSTEM',
+      actorRole: 'SYSTEM',
+      note: 'Compliance forms generated and ready for signature',
     });
 
     return mapEmployee(updated);
@@ -204,15 +162,13 @@ export class ComplianceService {
         },
       });
 
-      await this.db.auditLog.create({
-        data: {
-          employeeId,
-          fromStatus: employee.status,
-          toStatus: 'DAY1_READY',
-          actorId: signedBy,
-          actorRole: role as any,
-          note: 'All compliance forms signed, advanced to Day 1 Ready.',
-        },
+      await this.auditLogService.createLog({
+        employeeId,
+        fromStatus: employee.status,
+        toStatus: 'DAY1_READY',
+        actorId: signedBy,
+        actorRole: role as any,
+        note: 'All compliance forms signed, advanced to Day 1 Ready.',
       });
 
       await this.milestoneService.createMilestonesForEmployee(employeeId);

@@ -1,5 +1,6 @@
 import { Injectable, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DbService } from '../db/db.service';
+import { AuditLogService } from '../db/audit-log.service';
 import { Employee, Milestone } from '../interfaces/types.interface';
 import { mapEmployee } from '../employee/employee.service';
 
@@ -30,7 +31,10 @@ export function mapMilestone(m: any): Milestone {
 
 @Injectable()
 export class MilestoneService {
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   private async getEmployeeOrThrow(id: string): Promise<Employee> {
     const employee = await this.db.employee.findUnique({
@@ -138,15 +142,13 @@ export class MilestoneService {
       },
     });
 
-    await this.db.auditLog.create({
-      data: {
-        employeeId,
-        fromStatus: employee.status,
-        toStatus: targetStatus,
-        actorId: role === 'NEW_HIRE' ? employeeId : 'MANAGER_PORTAL',
-        actorRole: role as any,
-        note: `Milestone ${type} completed.`,
-      },
+    await this.auditLogService.createLog({
+      employeeId,
+      fromStatus: employee.status,
+      toStatus: targetStatus,
+      actorId: role === 'NEW_HIRE' ? employeeId : 'MANAGER_PORTAL',
+      actorRole: role as any,
+      note: `Milestone ${type} completed.`,
     });
 
     return mapEmployee(updated);

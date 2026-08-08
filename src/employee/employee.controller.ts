@@ -1,33 +1,116 @@
-import { Controller, Post, Get, Body, Param, Req } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Req, UseGuards, Res, Sse, MessageEvent } from '@nestjs/common';
 import { EmployeeService } from './employee.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { Roles } from '../auth/roles.decorator';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import { AbacOwnershipGuard } from '../common/guards/abac-ownership.guard';
+import { AuditLogService } from '../db/audit-log.service';
+import { PdfGeneratorService } from './pdf-generator.service';
+import { EmployeeStatusListener } from './employee-status.listener';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
+import type { Response } from 'express';
 
-@Controller('employees')
+@ApiTags('Employee')
+@ApiBearerAuth()
+@Controller()
 export class EmployeeController {
-  constructor(private readonly employeeService: EmployeeService) {}
+  constructor(
+    private readonly employeeService: EmployeeService,
+    private readonly auditLogService: AuditLogService,
+    private readonly pdfGeneratorService: PdfGeneratorService,
+  ) {}
 
   @Roles('HR', 'MANAGER')
-  @Get()
+  @ApiOperation({ summary: 'List all employees' })
+  @ApiResponse({ status: 200, description: 'Return all employees.' })
+  @Get('employees')
   findAll() {
     return this.employeeService.listEmployees();
   }
 
   @Roles('HR')
-  @Post()
+  @ApiOperation({ summary: 'Create a new employee' })
+  @ApiResponse({ status: 201, description: 'The employee has been successfully created.', type: CreateEmployeeDto })
+  @Post('employees')
   create(@Body() dto: CreateEmployeeDto) {
     return this.employeeService.createEmployee(dto);
   }
 
+  @Roles('HR', 'SYSTEM')
+  @ApiOperation({ summary: 'Verify the cryptographic integrity of the audit logs chain' })
+  @ApiResponse({ status: 200, description: 'Return audit verification status.' })
+  @Get('audit/verify-integrity')
+  async verifyIntegrity() {
+    const result = await this.auditLogService.verifyChainIntegrity();
+    const count = await this.auditLogService['db'].auditLog.count();
+    return {
+      isValid: !result.isTampered,
+      totalLogsVerified: count,
+      brokenIndex: result.brokenIndex,
+    };
+  }
+
   @Roles('HR', 'MANAGER', 'NEW_HIRE')
-  @Get(':id')
+  @UseGuards(AbacOwnershipGuard)
+  @ApiOperation({ summary: 'Get employee details by ID' })
+  @ApiParam({ name: 'id', description: 'Employee ID' })
+  @ApiResponse({ status: 200, description: 'Return employee details.' })
+  @ApiResponse({ status: 404, description: 'Employee not found.' })
+  @Get('employees/:id')
   findOne(@Param('id') id: string) {
     return this.employeeService.getEmployee(id);
   }
 
   @Roles('NEW_HIRE')
-  @Post(':id/open-preboarding')
+  @UseGuards(AbacOwnershipGuard)
+  @ApiOperation({ summary: 'Open preboarding link for a new hire' })
+  @ApiParam({ name: 'id', description: 'Employee ID' })
+  @ApiResponse({ status: 200, description: 'Preboarding link opened and status updated.' })
+  @Post('employees/:id/open-preboarding')
   openPreboarding(@Param('id') id: string, @Req() req: any) {
     return this.employeeService.openPreboardingLink(id, req.user.role);
+  }
+
+  @Roles('HR', 'MANAGER', 'NEW_HIRE')
+  @UseGuards(AbacOwnershipGuard)
+  @ApiOperation({ summary: 'Stream candidate compliance form as a vector PDF' })
+  @ApiParam({ name: 'id', description: 'Employee ID' })
+  @ApiParam({ name: 'formType', description: 'Compliance form type (e.g. PF_FORM11, ESI_FORM1)' })
+  @Get('employee/:id/compliance-pdf/:formType')
+  async downloadPdf(
+    @Param('id') employeeId: string,
+    @Param('formType') formType: string,
+    @Res() res: Response,
+  ) {
+    const employee = await this.employeeService.getEmployee(employeeId);
+    const personal = employee.personal as any;
+    const job = employee.job as any;
+
+    const candidateInfo = {
+      name: personal.name,
+      dob: personal.dob,
+      phone: personal.phone,
+      email: personal.email,
+      title: job.title,
+      department: job.department,
+      joiningDate: job.joiningDate,
+    };
+
+    const pdfBuffer = await this.pdfGeneratorService.generateFormPDF(formType, candidateInfo);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${formType}_${employeeId}.pdf`);
+    res.end(pdfBuffer);
+  }
+
+  @Roles('HR', 'MANAGER')
+  @ApiOperation({ summary: 'Stream live employee status changes in real time via SSE' })
+  @Sse('employee/live-status')
+  liveStatus(): Observable<MessageEvent> {
+    return EmployeeStatusListener.statusChange$.pipe(
+      map((data) => ({
+        data,
+      }))
+    );
   }
 }

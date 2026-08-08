@@ -1,7 +1,9 @@
 import { Injectable, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DbService } from '../db/db.service';
+import { AuditLogService } from '../db/audit-log.service';
 import { Employee, EmployeeStatus } from '../interfaces/types.interface';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
+import { ComplianceRuleService } from './compliance-rule.service';
 
 export function mapEmployee(emp: any): Employee {
   return {
@@ -19,6 +21,48 @@ export function mapEmployee(emp: any): Employee {
 
 @Injectable()
 export class EmployeeService {
+  constructor(
+    private readonly db: DbService,
+    private readonly complianceRuleService: ComplianceRuleService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
+
+  async generateComplianceForms(employeeId: string): Promise<void> {
+    const employee = await this.getEmployeeOrThrow(employeeId);
+
+    // If forms already exist, do not regenerate them to avoid race conditions.
+    const formsCount = await this.db.complianceForm.count({
+      where: { employeeId },
+    });
+    if (formsCount > 0) {
+      return;
+    }
+
+    const { requiredForms } = await this.complianceRuleService.evaluateEligibility(
+      employee.job.salary,
+    );
+
+    for (const formType of requiredForms) {
+      try {
+        await this.db.complianceForm.create({
+          data: {
+            id: Math.random().toString(36).substring(7),
+            employeeId,
+            type: formType,
+            status: 'PENDING_GENERATION',
+            deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            data: {},
+          },
+        });
+      } catch (err: any) {
+        if (err.code === 'P2002') {
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
   async listEmployees(): Promise<Employee[]> {
     const list = await this.db.employee.findMany({
       include: {
@@ -29,8 +73,6 @@ export class EmployeeService {
     });
     return list.map(mapEmployee);
   }
-
-  constructor(private readonly db: DbService) {}
 
   private async getEmployeeOrThrow(id: string): Promise<Employee> {
     const employee = await this.db.employee.findUnique({
@@ -73,15 +115,13 @@ export class EmployeeService {
       },
     });
 
-    await this.db.auditLog.create({
-      data: {
-        employeeId: newEmployee.id,
-        fromStatus: 'INVITED',
-        toStatus: 'INVITED',
-        actorId: dto.managerId || 'HR_PORTAL',
-        actorRole: 'HR',
-        note: `Employee invited by HR. Title: ${dto.title}, Dept: ${dto.department}`,
-      },
+    await this.auditLogService.createLog({
+      employeeId: newEmployee.id,
+      fromStatus: 'INVITED',
+      toStatus: 'INVITED',
+      actorId: dto.managerId || 'HR_PORTAL',
+      actorRole: 'HR',
+      note: `Employee invited by HR. Title: ${dto.title}, Dept: ${dto.department}`,
     });
 
     return mapEmployee(newEmployee);
@@ -116,15 +156,13 @@ export class EmployeeService {
       },
     });
 
-    await this.db.auditLog.create({
-      data: {
-        employeeId,
-        fromStatus: employee.status,
-        toStatus: 'DOCUMENTS_PENDING',
-        actorId: employeeId,
-        actorRole: 'NEW_HIRE',
-        note: 'Onboarding preboarding link opened by candidate',
-      },
+    await this.auditLogService.createLog({
+      employeeId,
+      fromStatus: employee.status,
+      toStatus: 'DOCUMENTS_PENDING',
+      actorId: employeeId,
+      actorRole: 'NEW_HIRE',
+      note: 'Preboarding link opened, status updated to documents pending',
     });
 
     return mapEmployee(updated);
