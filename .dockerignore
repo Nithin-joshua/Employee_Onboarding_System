@@ -1,0 +1,27 @@
+# Dependency directories
+node_modules
+dist
+.next
+out
+build
+uploads
+coverage
+
+# IDE / System files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.git
+.gitignore
+.claude
+.agents
+.gemini
+.windsurf
+.idea
+.vscode
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

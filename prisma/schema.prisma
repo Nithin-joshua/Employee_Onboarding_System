@@ -5,6 +5,7 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../generated/prisma"
 }
 
 enum EmployeeStatus {
@@ -66,6 +67,13 @@ enum MilestoneStatus {
   DONE
 }
 
+enum AsyncJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 enum Role {
   HR
   MANAGER
@@ -105,6 +113,11 @@ model Document {
   reviewedBy      String?
   rejectionReason String?
   storagePath     String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
 }
 
 model ComplianceForm {
@@ -115,8 +128,11 @@ model ComplianceForm {
   status     ComplianceFormStatus
   deadline   DateTime
   data       Json
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
 
   @@unique([employeeId, type])
+  @@index([employeeId])
 }
 
 model Milestone {
@@ -147,6 +163,8 @@ model OtpCode {
   code      String
   expiresAt DateTime
   verified  Boolean  @default(false)
+
+  @@index([userId])
 }
 
 model AuditLog {
@@ -160,6 +178,8 @@ model AuditLog {
   note         String?
   previousHash String         @default("0")
   currentHash  String
+
+  @@index([employeeId])
 }
 
 model ComplianceRule {
@@ -174,13 +194,15 @@ model ComplianceRule {
 }
 
 model AsyncJob {
-  id        String   @id @default(uuid())
+  id        String         @id @default(uuid())
   type      String
   payload   Json
-  status    String   // PENDING, PROCESSING, COMPLETED, FAILED
-  attempts  Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status    AsyncJobStatus
+  attempts  Int            @default(0)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([status])
 }
 
 model OutboxEvent {

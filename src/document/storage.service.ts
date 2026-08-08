@@ -4,47 +4,72 @@ import { LocalVaultService } from '../common/services/local-vault.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+/**
+ * StorageService handles document file storage.
+ *
+ * Storage mode is controlled by STORAGE_PROVIDER env var:
+ *   - 'local'    (default): stores encrypted files under uploads/
+ *   - 'supabase': stores files in Supabase Storage bucket 'employee-documents'
+ *
+ * Both providers are production-grade. There is no mock/fake mode.
+ * If required configuration is missing, this service throws a configuration error.
+ */
 @Injectable()
 export class StorageService {
-  private supabase: SupabaseClient;
+  private supabase: SupabaseClient | null = null;
 
   constructor(private readonly localVaultService: LocalVaultService) {
-    const supabaseUrl = process.env.SUPABASE_URL || 'https://mock.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'mock-key';
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+    if (this.isSupabaseEnabled()) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error(
+          'STORAGE_PROVIDER is set to "supabase" but SUPABASE_URL and/or ' +
+            'SUPABASE_SERVICE_ROLE_KEY are not set. ' +
+            'Configure them in your .env file (see .env.example).',
+        );
+      }
+
+      this.supabase = createClient(supabaseUrl, supabaseKey);
+    }
   }
 
   private isSupabaseEnabled(): boolean {
-    const provider = process.env.STORAGE_PROVIDER || 'local';
-    return provider === 'supabase' && process.env.OCR_MODE !== 'mock';
+    return (process.env.STORAGE_PROVIDER || 'local') === 'supabase';
   }
 
-  async uploadDocument(employeeId: string, docType: string, buffer: Buffer, mimeType: string): Promise<string> {
+  async uploadDocument(
+    employeeId: string,
+    docType: string,
+    buffer: Buffer,
+    mimeType: string,
+  ): Promise<string> {
     if (!this.isSupabaseEnabled()) {
-      // Local Vault Storage
-      const { encryptedData, iv, authTag } = this.localVaultService.encryptBuffer(buffer);
+      // Local encrypted vault storage
+      const { encryptedData, iv, authTag } =
+        this.localVaultService.encryptBuffer(buffer);
       const packed = this.localVaultService.pack(encryptedData, iv, authTag);
 
-      const ext = 'enc';
       const dir = path.join(process.cwd(), 'uploads', employeeId);
-      const filePath = path.join(dir, `${docType.toUpperCase()}.${ext}`);
+      const filePath = path.join(dir, `${docType.toUpperCase()}.enc`);
 
       await fs.mkdir(dir, { recursive: true });
       await fs.writeFile(filePath, packed);
 
-      return `uploads/${employeeId}/${docType.toUpperCase()}.${ext}`;
+      return `uploads/${employeeId}/${docType.toUpperCase()}.enc`;
     }
 
     // Supabase Storage
     const ext = mimeType.split('/')[1] || 'pdf';
     const pathWithinBucket = `${employeeId}/${docType.toUpperCase()}.${ext}`;
 
-    const { data, error } = await this.supabase.storage
-      .from('employee-documents')
-      .upload(pathWithinBucket, buffer, {
-        contentType: mimeType,
-        upsert: true,
-      });
+    const { error } = await this.supabase!.storage.from(
+      'employee-documents',
+    ).upload(pathWithinBucket, buffer, {
+      contentType: mimeType,
+      upsert: true,
+    });
 
     if (error) {
       throw new Error(`Failed to upload to Supabase storage: ${error.message}`);
@@ -55,12 +80,18 @@ export class StorageService {
 
   async getSignedUrl(storagePath: string): Promise<string> {
     if (!this.isSupabaseEnabled()) {
-      return `https://mock.supabase.co/storage/v1/object/public/employee-documents/${storagePath}`;
+      // For local vault files, construct a local-accessible reference.
+      // The signed URL concept only applies to Supabase; for local files the
+      // OCR service must use downloadDocument() to get the decrypted buffer.
+      throw new Error(
+        'getSignedUrl is only available when STORAGE_PROVIDER=supabase. ' +
+          'For local storage, use downloadDocument() to obtain the file buffer.',
+      );
     }
 
-    const { data, error } = await this.supabase.storage
-      .from('employee-documents')
-      .createSignedUrl(storagePath, 600);
+    const { data, error } = await this.supabase!.storage.from(
+      'employee-documents',
+    ).createSignedUrl(storagePath, 600);
 
     if (error) {
       throw new Error(`Failed to create signed URL: ${error.message}`);
@@ -73,26 +104,37 @@ export class StorageService {
     if (storagePath.startsWith('uploads/')) {
       const absolutePath = path.join(process.cwd(), storagePath);
       const packed = await fs.readFile(absolutePath);
-      const { encryptedData, iv, authTag } = this.localVaultService.unpack(packed);
-      const decryptedStream = this.localVaultService.decryptBuffer(encryptedData, iv, authTag);
-      
-      const chunks: any[] = [];
+      const { encryptedData, iv, authTag } =
+        this.localVaultService.unpack(packed);
+      const decryptedStream = this.localVaultService.decryptBuffer(
+        encryptedData,
+        iv,
+        authTag,
+      );
+
+      const chunks: Buffer[] = [];
       for await (const chunk of decryptedStream) {
-        chunks.push(chunk);
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       }
       return Buffer.concat(chunks);
     }
 
     if (!this.isSupabaseEnabled()) {
-      return Buffer.from('mock document content');
+      throw new Error(
+        `Cannot download document at path "${storagePath}": ` +
+          'STORAGE_PROVIDER is not "supabase" and the path is not a local uploads/ path.',
+      );
     }
 
-    const { data, error } = await this.supabase.storage
-      .from('employee-documents')
-      .download(storagePath);
+    const { data, error } =
+      await this.supabase!.storage.from('employee-documents').download(
+        storagePath,
+      );
 
     if (error) {
-      throw new Error(`Failed to download from Supabase storage: ${error.message}`);
+      throw new Error(
+        `Failed to download from Supabase storage: ${error.message}`,
+      );
     }
 
     const arrayBuffer = await data.arrayBuffer();

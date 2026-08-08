@@ -6,8 +6,17 @@ describe('LocalVault & DocumentParser Services', () => {
   let parserService: DocumentParserService;
 
   beforeAll(() => {
+    // LocalVaultService requires VAULT_ENCRYPTION_KEY from the environment.
+    // In tests, we set a deterministic test-only key so crypto operations work
+    // without real secrets. This key is scoped to the test process only.
+    process.env.VAULT_ENCRYPTION_KEY = 'test-vault-key-for-unit-tests-only-32b';
+
     vaultService = new LocalVaultService();
     parserService = new DocumentParserService();
+  });
+
+  afterAll(() => {
+    delete process.env.VAULT_ENCRYPTION_KEY;
   });
 
   it('should encrypt and decrypt a buffer correctly', async () => {
@@ -16,20 +25,26 @@ describe('LocalVault & DocumentParser Services', () => {
 
     expect(encryptedData).not.toEqual(rawData);
 
-    const decryptedStream = vaultService.decryptBuffer(encryptedData, iv, authTag);
+    const decryptedStream = vaultService.decryptBuffer(
+      encryptedData,
+      iv,
+      authTag,
+    );
     const chunks: Buffer[] = [];
     for await (const chunk of decryptedStream) {
       chunks.push(chunk as Buffer);
     }
     const decryptedBuffer = Buffer.concat(chunks);
 
-    expect(decryptedBuffer.toString('utf-8')).toBe('Hello Secure Local Vault world!');
+    expect(decryptedBuffer.toString('utf-8')).toBe(
+      'Hello Secure Local Vault world!',
+    );
   });
 
   it('should pack and unpack encrypted parts correctly', () => {
     const rawData = Buffer.from('hello');
     const { encryptedData, iv, authTag } = vaultService.encryptBuffer(rawData);
-    
+
     const packed = vaultService.pack(encryptedData, iv, authTag);
     const unpacked = vaultService.unpack(packed);
 

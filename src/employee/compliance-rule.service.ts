@@ -21,7 +21,8 @@ export class ComplianceRuleService implements OnModuleInit {
         ruleKey: 'ESI_GROSS_LIMIT',
         ruleName: 'ESI Gross Limit',
         threshold: 21000,
-        description: 'Salary threshold limit for ESI contribution applicability',
+        description:
+          'Salary threshold limit for ESI contribution applicability',
       },
     ];
 
@@ -34,20 +35,28 @@ export class ComplianceRuleService implements OnModuleInit {
     }
   }
 
-  async getThreshold(ruleKey: string, fallback: number): Promise<number> {
-    const rule = await this.db.complianceRule.findUnique({
+  async getThreshold(
+    ruleKey: string,
+    fallback: number,
+    tx?: any,
+  ): Promise<number> {
+    const client = tx || this.db;
+    const rule = await client.complianceRule.findUnique({
       where: { ruleKey, isActive: true },
     });
     return rule ? rule.threshold : fallback;
   }
 
-  async evaluateEligibility(grossSalary: number): Promise<{
+  async evaluateEligibility(
+    grossSalary: number,
+    tx?: any,
+  ): Promise<{
     pfApplicable: boolean;
     esiApplicable: boolean;
     requiredForms: ('PF_FORM11' | 'PF_FORM2' | 'ESI_FORM1')[];
   }> {
-    const pfLimit = await this.getThreshold('PF_ELIGIBILITY_LIMIT', 15000);
-    const esiLimit = await this.getThreshold('ESI_GROSS_LIMIT', 21000);
+    const pfLimit = await this.getThreshold('PF_ELIGIBILITY_LIMIT', 15000, tx);
+    const esiLimit = await this.getThreshold('ESI_GROSS_LIMIT', 21000, tx);
 
     // PF is always applicable as per the original hardcoded rule (pfApplicable = true)
     const pfApplicable = true;

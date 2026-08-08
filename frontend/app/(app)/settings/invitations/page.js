@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { request } from '../../../../lib/apiClient';
@@ -25,7 +25,7 @@ export default function InvitationCodes() {
     joiningDate: '',
   });
 
-  const fetchInvitations = async () => {
+  const fetchInvitations = useCallback(async () => {
     try {
       setLoading(true);
       const data = await request('/invitations', { method: 'GET' }, session);
@@ -35,7 +35,7 @@ export default function InvitationCodes() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session]);
 
   useEffect(() => {
     if (session?.user?.role === 'HR') {
@@ -44,7 +44,7 @@ export default function InvitationCodes() {
       setError('Access Denied: Only HR can view invitation codes.');
       setLoading(false);
     }
-  }, [session]);
+  }, [session, fetchInvitations]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });

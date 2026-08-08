@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { request } from '../../../../lib/apiClient';
@@ -17,7 +17,7 @@ export default function DocumentUploads() {
 
   const [actionError, setActionError] = useState('');
 
-  const fetchEmployee = async () => {
+  const fetchEmployee = useCallback(async () => {
     try {
       setLoading(true);
       const data = await request(`/employees/${session.user.employeeId}`, { method: 'GET' }, session);
@@ -27,13 +27,13 @@ export default function DocumentUploads() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session]);
 
   useEffect(() => {
     if (session?.user?.employeeId) {
       fetchEmployee();
     }
-  }, [session]);
+  }, [session, fetchEmployee]);
 
   const handleFileUpload = async (e, type) => {
     const file = e.target.files?.[0];

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState, use, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { request } from '../../../../../lib/apiClient';
@@ -16,7 +16,7 @@ export default function ComplianceFormSigning({ params: paramsPromise }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
 
-  const fetchEmployee = async () => {
+  const fetchEmployee = useCallback(async () => {
     try {
       setLoading(true);
       const data = await request(`/employees/${session.user.employeeId}`, { method: 'GET' }, session);
@@ -26,13 +26,13 @@ export default function ComplianceFormSigning({ params: paramsPromise }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session]);
 
   useEffect(() => {
     if (session?.user?.employeeId) {
       fetchEmployee();
     }
-  }, [session]);
+  }, [session, fetchEmployee]);
 
   const targetForm = employee?.complianceForms?.find((f) => f.id === params.formId);
 

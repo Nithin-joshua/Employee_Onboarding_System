@@ -8,7 +8,11 @@ import { Subject } from 'rxjs';
 @Injectable()
 export class EmployeeStatusListener {
   private readonly logger = new Logger(EmployeeStatusListener.name);
-  public static readonly statusChange$ = new Subject<{ employeeId: string; newStatus: string; timestamp: string }>();
+  public static readonly statusChange$ = new Subject<{
+    employeeId: string;
+    newStatus: string;
+    timestamp: string;
+  }>();
 
   constructor(
     private readonly db: DbService,
@@ -22,7 +26,9 @@ export class EmployeeStatusListener {
     eventType: string;
     payload: any;
   }) {
-    this.logger.log(`Received outbox event: ${event.id} of type ${event.eventType}`);
+    this.logger.log(
+      `Received outbox event: ${event.id} of type ${event.eventType}`,
+    );
     const { employeeId, toStatus, email, name } = event.payload;
 
     // Push event to SSE stream

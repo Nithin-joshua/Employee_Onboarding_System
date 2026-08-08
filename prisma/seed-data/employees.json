@@ -1,7 +1,6 @@
 [
   {
     "id": "emp_low_salary",
-    "status": "INVITED",
     "personal": {
       "name": "Alice Smith",
       "dob": "1995-04-12",
@@ -14,16 +13,10 @@
       "managerId": "mgr_123",
       "salary": 18000,
       "joiningDate": "2026-09-01"
-    },
-    "documentIds": [],
-    "complianceFormIds": [],
-    "milestoneIds": [],
-    "createdAt": "2026-08-03T11:00:00Z",
-    "updatedAt": "2026-08-03T11:00:00Z"
+    }
   },
   {
     "id": "emp_high_salary",
-    "status": "INVITED",
     "personal": {
       "name": "Bob Jones",
       "dob": "1990-08-20",
@@ -36,16 +29,10 @@
       "managerId": "mgr_123",
       "salary": 50000,
       "joiningDate": "2026-09-01"
-    },
-    "documentIds": [],
-    "complianceFormIds": [],
-    "milestoneIds": [],
-    "createdAt": "2026-08-03T11:00:00Z",
-    "updatedAt": "2026-08-03T11:00:00Z"
+    }
   },
   {
     "id": "emp_mid_salary",
-    "status": "INVITED",
     "personal": {
       "name": "Charlie Brown",
       "dob": "1993-11-05",
@@ -58,11 +45,6 @@
       "managerId": "director_456",
       "salary": 80000,
       "joiningDate": "2026-09-01"
-    },
-    "documentIds": [],
-    "complianceFormIds": [],
-    "milestoneIds": [],
-    "createdAt": "2026-08-03T11:00:00Z",
-    "updatedAt": "2026-08-03T11:00:00Z"
+    }
   }
 ]

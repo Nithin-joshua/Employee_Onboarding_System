@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { Document } from '../interfaces/types.interface';
 import { StorageService } from './storage.service';
 import { AadhaarSchema } from './ocr-schemas/aadhaar.schema';
@@ -8,8 +10,44 @@ import { RelievingLetterSchema } from './ocr-schemas/relieving_letter.schema';
 import { BankProofSchema } from './ocr-schemas/bank_proof.schema';
 import { PhotoSchema } from './ocr-schemas/photo.schema';
 
-export function buildSchemaFor(docType: string) {
-  let schema: any;
+/**
+ * OcrService extracts structured fields from uploaded documents.
+ *
+ * Mode is controlled by the OCR_MODE environment variable:
+ *
+ *   OCR_MODE=mistral  (default / production):
+ *     Calls the Mistral OCR API using MISTRAL_API_KEY.
+ *     Requires MISTRAL_API_KEY and STORAGE_PROVIDER=supabase (for signed URLs).
+ *
+ *   OCR_MODE=local:
+ *     Reads pre-extracted JSON from prisma/seed-data/ocr/<TYPE>.json.
+ *     Intended for local development when Mistral API access is not available.
+ *     Files must exist; missing files produce a clear error.
+ *
+ * There is no silent fallback. Missing configuration produces a runtime error.
+ */
+
+interface OcrSeedFile {
+  fields: Record<string, unknown>;
+  confidence?: number;
+}
+
+interface MistralOcrResponse {
+  documentAnnotation: string | Record<string, unknown>;
+  overallConfidence?: number;
+  pages?: Array<{
+    confidence?: number;
+    blocks?: Array<{ confidence?: number }>;
+  }>;
+}
+
+export interface OcrResult {
+  fields: Record<string, unknown>;
+  confidence: number;
+}
+
+export function buildSchemaFor(docType: string): Record<string, unknown> {
+  let schema: Record<string, unknown>;
   switch (docType.toUpperCase()) {
     case 'AADHAAR':
       schema = AadhaarSchema;
@@ -32,13 +70,10 @@ export function buildSchemaFor(docType: string) {
     default:
       schema = {
         type: 'object',
-        properties: {
-          extractedText: { type: 'string' },
-        },
+        properties: { extractedText: { type: 'string' } },
         required: ['extractedText'],
       };
   }
-
   return {
     type: 'json_schema',
     json_schema: {
@@ -49,19 +84,19 @@ export function buildSchemaFor(docType: string) {
   };
 }
 
-function averageBlockConfidence(response: any): number {
-  if (!response) return 0.95;
+function averageBlockConfidence(response: MistralOcrResponse): number {
   let sum = 0;
   let count = 0;
 
-  const traverse = (obj: any) => {
+  const traverse = (obj: unknown): void => {
     if (!obj || typeof obj !== 'object') return;
-    if (typeof obj.confidence === 'number') {
-      sum += obj.confidence;
+    const record = obj as Record<string, unknown>;
+    if (typeof record['confidence'] === 'number') {
+      sum += record['confidence'];
       count++;
     }
-    for (const key of Object.keys(obj)) {
-      traverse(obj[key]);
+    for (const key of Object.keys(record)) {
+      traverse(record[key]);
     }
   };
 
@@ -70,27 +105,68 @@ function averageBlockConfidence(response: any): number {
 }
 
 @Injectable()
-export class MockOcrService {
+export class OcrService {
   constructor(private readonly storageService: StorageService) {}
 
-  async extract(doc: Document): Promise<{ fields: Record<string, unknown>; confidence: number }> {
-    if (process.env.OCR_MODE === 'mock') {
-      try {
-        const fs = require('fs/promises');
-        const path = require('path');
-        const filePath = path.join(process.cwd(), 'fixtures', 'ocr-mock', `${doc.type.toUpperCase()}.json`);
-        const content = await fs.readFile(filePath, 'utf-8');
-        const data = JSON.parse(content);
-        return {
-          fields: data.fields,
-          confidence: data.confidence ?? 0.95,
-        };
-      } catch (err) {
-        return {
-          fields: { mockKey: 'mockValue' },
-          confidence: 0.95,
-        };
-      }
+  async extract(doc: Document): Promise<OcrResult> {
+    const mode = process.env.OCR_MODE || 'mistral';
+
+    if (mode === 'local') {
+      return this.extractFromLocalSeedData(doc.type);
+    }
+
+    return this.extractViaMistralApi(doc);
+  }
+
+  /**
+   * Reads pre-extracted OCR data from prisma/seed-data/ocr/<TYPE>.json.
+   * Used during local development (OCR_MODE=local).
+   * Fails clearly if the file does not exist.
+   */
+  private async extractFromLocalSeedData(docType: string): Promise<OcrResult> {
+    const filePath = path.join(
+      process.cwd(),
+      'prisma',
+      'seed-data',
+      'ocr',
+      `${docType.toUpperCase()}.json`,
+    );
+
+    let data: OcrSeedFile;
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      data = JSON.parse(content) as OcrSeedFile;
+    } catch (err) {
+      throw new Error(
+        `OCR_MODE=local but seed data file not found at "${filePath}". ` +
+          `Create prisma/seed-data/ocr/${docType.toUpperCase()}.json with the expected extracted fields. ` +
+          `Original error: ${(err as Error).message}`,
+      );
+    }
+
+    if (!data.fields || typeof data.fields !== 'object') {
+      throw new Error(
+        `OCR seed data file "${filePath}" must contain a "fields" object.`,
+      );
+    }
+
+    return {
+      fields: data.fields,
+      confidence: typeof data.confidence === 'number' ? data.confidence : 0.95,
+    };
+  }
+
+  /**
+   * Calls the Mistral OCR API.
+   * Requires MISTRAL_API_KEY and STORAGE_PROVIDER=supabase for signed URLs.
+   */
+  private async extractViaMistralApi(doc: Document): Promise<OcrResult> {
+    const apiKey = process.env.MISTRAL_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        'MISTRAL_API_KEY environment variable is required when OCR_MODE=mistral. ' +
+          'Set it in your .env file (see .env.example), or set OCR_MODE=local for local development.',
+      );
     }
 
     if (!doc.storagePath) {
@@ -98,12 +174,11 @@ export class MockOcrService {
     }
 
     const signedUrl = await this.storageService.getSignedUrl(doc.storagePath);
-    const apiKey = process.env.MISTRAL_API_KEY || 'mock-key';
 
     const response = await fetch('https://api.mistral.ai/v1/ocr', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -118,17 +193,16 @@ export class MockOcrService {
       throw new Error(`Mistral OCR API error: ${response.status} ${errText}`);
     }
 
-    const result = await response.json();
+    const result = (await response.json()) as MistralOcrResponse;
 
-    const fields = typeof result.documentAnnotation === 'string'
-      ? JSON.parse(result.documentAnnotation)
-      : (result.documentAnnotation || {});
+    const fields: Record<string, unknown> =
+      typeof result.documentAnnotation === 'string'
+        ? (JSON.parse(result.documentAnnotation) as Record<string, unknown>)
+        : (result.documentAnnotation ?? {});
 
-    const confidence = result.overallConfidence ?? averageBlockConfidence(result);
+    const confidence =
+      result.overallConfidence ?? averageBlockConfidence(result);
 
-    return {
-      fields,
-      confidence,
-    };
+    return { fields, confidence };
   }
 }

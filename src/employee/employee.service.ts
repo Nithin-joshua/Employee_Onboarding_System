@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DbService } from '../db/db.service';
 import { AuditLogService } from '../db/audit-log.service';
 import { Employee, EmployeeStatus } from '../interfaces/types.interface';
@@ -12,13 +17,21 @@ export function mapEmployee(emp: any): Employee {
   return {
     id: emp.id,
     status: emp.status as EmployeeStatus,
-    personal: emp.personal as any,
-    job: emp.job as any,
+    personal: emp.personal,
+    job: emp.job,
     documentIds: emp.documents ? emp.documents.map((d: any) => d.id) : [],
-    complianceFormIds: emp.complianceForms ? emp.complianceForms.map((c: any) => c.id) : [],
+    complianceFormIds: emp.complianceForms
+      ? emp.complianceForms.map((c: any) => c.id)
+      : [],
     milestoneIds: emp.milestones ? emp.milestones.map((m: any) => m.id) : [],
-    createdAt: emp.createdAt instanceof Date ? emp.createdAt.toISOString() : emp.createdAt,
-    updatedAt: emp.updatedAt instanceof Date ? emp.updatedAt.toISOString() : emp.updatedAt,
+    createdAt:
+      emp.createdAt instanceof Date
+        ? emp.createdAt.toISOString()
+        : emp.createdAt,
+    updatedAt:
+      emp.updatedAt instanceof Date
+        ? emp.updatedAt.toISOString()
+        : emp.updatedAt,
   };
 }
 
@@ -42,9 +55,8 @@ export class EmployeeService {
       return;
     }
 
-    const { requiredForms } = await this.complianceRuleService.evaluateEligibility(
-      employee.job.salary,
-    );
+    const { requiredForms } =
+      await this.complianceRuleService.evaluateEligibility(employee.job.salary);
 
     for (const formType of requiredForms) {
       try {
@@ -134,7 +146,11 @@ export class EmployeeService {
     });
 
     // Email credentials
-    await this.emailService.sendOnboardingInvite(dto.email, dto.name, tempPassword);
+    await this.emailService.sendOnboardingInvite(
+      dto.email,
+      dto.name,
+      tempPassword,
+    );
 
     await this.auditLogService.createLog({
       employeeId: newEmployee.id,
@@ -152,7 +168,10 @@ export class EmployeeService {
     return this.getEmployeeOrThrow(id);
   }
 
-  async openPreboardingLink(employeeId: string, role: string): Promise<Employee> {
+  async openPreboardingLink(
+    employeeId: string,
+    role: string,
+  ): Promise<Employee> {
     const employee = await this.db.employee.findUnique({
       where: { id: employeeId },
     });
@@ -162,7 +181,9 @@ export class EmployeeService {
     }
 
     if (employee.status !== 'INVITED') {
-      throw new ConflictException(`Cannot open preboarding link. Employee status is ${employee.status}`);
+      throw new ConflictException(
+        `Cannot open preboarding link. Employee status is ${employee.status}`,
+      );
     }
 
     const updated = await this.db.employee.update({
@@ -189,13 +210,20 @@ export class EmployeeService {
     return mapEmployee(updated);
   }
 
-  validateRole(role: string, allowed: string[], employeeId?: string, signedBy?: string) {
+  validateRole(
+    role: string,
+    allowed: string[],
+    employeeId?: string,
+    signedBy?: string,
+  ) {
     if (allowed.includes('SYSTEM') && role === 'SYSTEM') {
       return;
     }
     if (allowed.includes('NEW_HIRE') && role === 'NEW_HIRE') {
       if (employeeId && signedBy && signedBy !== employeeId) {
-        throw new ForbiddenException(`New hire can only perform actions for themselves`);
+        throw new ForbiddenException(
+          `New hire can only perform actions for themselves`,
+        );
       }
       return;
     }
@@ -205,6 +233,8 @@ export class EmployeeService {
     if (allowed.includes('MANAGER') && role === 'MANAGER') {
       return;
     }
-    throw new ForbiddenException(`Role ${role} is not authorized for this action`);
+    throw new ForbiddenException(
+      `Role ${role} is not authorized for this action`,
+    );
   }
 }

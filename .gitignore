@@ -22,9 +22,26 @@ lerna-debug.log*
 *.sln
 *.sw?
 
+# Prisma generated client
 /generated/prisma
+
+# Environment files — NEVER commit secrets
 .env
+.env.local
+
+# Generated / build artifacts
+/coverage
+/uploads
+*.enc
+
+# Tooling directories
 .agents/
 .claude/
 .windsurf/
 /scratch/
+
+# Old runtime fixtures directory (data moved to prisma/seed-data/ and test/fixtures/)
+/fixtures/
+
+# Build output (built inside Docker; not committed)
+/dist/

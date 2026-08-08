@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DbService } from '../db/db.service';
 import { AuditLogService } from '../db/audit-log.service';
@@ -23,72 +27,83 @@ export class AuthService {
     dob: string;
     phone: string;
   }) {
-    // Validate code exists + not used
-    const codeRecord = await this.db.invitationCode.findUnique({
-      where: { code: dto.invitationCode },
+    const existingUser = await this.db.user.findUnique({
+      where: { email: dto.email },
     });
-    if (!codeRecord || codeRecord.used) {
-      throw new ConflictException('Invalid or already used invitation code');
-    }
-
-    const existingUser = await this.db.user.findUnique({ where: { email: dto.email } });
     if (existingUser) {
       throw new ConflictException('Email already registered');
     }
 
     const hash = await bcrypt.hash(dto.pass, 10);
     const employeeId = crypto.randomUUID();
-
-    // Create User (unverified status managed implicitly via verified boolean in OtpCode or employee status REGISTERED)
-    const user = await this.db.user.create({
-      data: {
-        email: dto.email,
-        passwordHash: hash,
-        role: 'NEW_HIRE',
-        employeeId,
-      },
-    });
-
-    // Create Employee record in REGISTERED state
-    await this.db.employee.create({
-      data: {
-        id: employeeId,
-        status: 'REGISTERED',
-        personal: {
-          name: dto.name,
-          dob: dto.dob,
-          phone: dto.phone,
-          email: dto.email,
-        },
-        job: {
-          title: codeRecord.jobTitle,
-          department: codeRecord.department,
-          managerId: codeRecord.managerId,
-          salary: codeRecord.salary,
-          joiningDate: codeRecord.joiningDate.toISOString(),
-        },
-      },
-    });
-
-    await this.auditLogService.createLog({
-      employeeId: employeeId,
-      fromStatus: 'REGISTERED',
-      toStatus: 'REGISTERED',
-      actorId: user.id,
-      actorRole: 'NEW_HIRE',
-      note: 'Candidate registered via invitation code',
-    });
-
-    // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
-    await this.db.otpCode.create({
-      data: {
-        userId: user.id,
-        code: otp,
-        expiresAt,
-      },
+    await this.db.$transaction(async (tx) => {
+      // Validate code exists + not used and lock it
+      const codeRecord = await tx.invitationCode.findUnique({
+        where: { code: dto.invitationCode },
+      });
+      if (!codeRecord || codeRecord.used) {
+        throw new ConflictException('Invalid or already used invitation code');
+      }
+
+      // Mark Invitation Code used early/atomically during registration
+      await tx.invitationCode.update({
+        where: { id: codeRecord.id },
+        data: { used: true },
+      });
+
+      // Create User
+      const user = await tx.user.create({
+        data: {
+          email: dto.email,
+          passwordHash: hash,
+          role: 'NEW_HIRE',
+          employeeId,
+        },
+      });
+
+      // Create Employee record in REGISTERED state
+      await tx.employee.create({
+        data: {
+          id: employeeId,
+          status: 'REGISTERED',
+          personal: {
+            name: dto.name,
+            dob: dto.dob,
+            phone: dto.phone,
+            email: dto.email,
+          },
+          job: {
+            title: codeRecord.jobTitle,
+            department: codeRecord.department,
+            managerId: codeRecord.managerId,
+            salary: codeRecord.salary,
+            joiningDate: codeRecord.joiningDate.toISOString(),
+          },
+        },
+      });
+
+      await this.auditLogService.createLog(
+        {
+          employeeId: employeeId,
+          fromStatus: 'REGISTERED',
+          toStatus: 'REGISTERED',
+          actorId: user.id,
+          actorRole: 'NEW_HIRE',
+          note: 'Candidate registered via invitation code',
+        },
+        tx,
+      );
+
+      await tx.otpCode.create({
+        data: {
+          userId: user.id,
+          code: otp,
+          expiresAt,
+        },
+      });
     });
 
     // Send via Brevo
@@ -108,57 +123,55 @@ export class AuthService {
       orderBy: { expiresAt: 'desc' },
     });
 
-    if (!latestOtp || latestOtp.code !== otp || latestOtp.expiresAt < new Date()) {
+    if (
+      !latestOtp ||
+      latestOtp.code !== otp ||
+      latestOtp.expiresAt < new Date()
+    ) {
       throw new ConflictException('Invalid or expired OTP code');
     }
 
-    // Mark verified
-    await this.db.otpCode.update({
-      where: { id: latestOtp.id },
-      data: { verified: true },
-    });
-
-    // Fetch employee linked to user
-    if (user.employeeId) {
-      const employee = await this.db.employee.findUnique({
-        where: { id: user.employeeId },
+    await this.db.$transaction(async (tx) => {
+      // Mark verified
+      await tx.otpCode.update({
+        where: { id: latestOtp.id },
+        data: { verified: true },
       });
 
-      if (employee) {
-        // Transition status REGISTERED -> DOCUMENTS_PENDING
-        await this.db.employee.update({
+      // Fetch employee linked to user
+      if (user.employeeId) {
+        const employee = await tx.employee.findUnique({
           where: { id: user.employeeId },
-          data: { status: 'DOCUMENTS_PENDING' },
         });
 
-        await this.auditLogService.createLog({
-          employeeId: user.employeeId,
-          fromStatus: 'REGISTERED',
-          toStatus: 'DOCUMENTS_PENDING',
-          actorId: user.id,
-          actorRole: 'NEW_HIRE',
-          note: 'OTP verified, candidate preboarding active',
-        });
-
-        // Mark Invitation Code used
-        const invitation = await this.db.invitationCode.findFirst({
-          where: {
-            jobTitle: (employee.job as any).title,
-            department: (employee.job as any).department,
-            used: false,
-          },
-        });
-        if (invitation) {
-          await this.db.invitationCode.update({
-            where: { id: invitation.id },
-            data: { used: true },
+        if (employee && employee.status === 'REGISTERED') {
+          // Transition status REGISTERED -> DOCUMENTS_PENDING
+          await tx.employee.update({
+            where: { id: user.employeeId },
+            data: { status: 'DOCUMENTS_PENDING' },
           });
+
+          await this.auditLogService.createLog(
+            {
+              employeeId: user.employeeId,
+              fromStatus: 'REGISTERED',
+              toStatus: 'DOCUMENTS_PENDING',
+              actorId: user.id,
+              actorRole: 'NEW_HIRE',
+              note: 'OTP verified, candidate preboarding active',
+            },
+            tx,
+          );
         }
       }
-    }
+    });
 
     // Issue standard login token
-    const payload = { sub: user.id, role: user.role, employeeId: user.employeeId };
+    const payload = {
+      sub: user.id,
+      role: user.role,
+      employeeId: user.employeeId,
+    };
     return {
       access_token: this.jwtService.sign(payload),
     };
@@ -199,7 +212,11 @@ export class AuthService {
     if (!isMatch) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    const payload = { sub: user.id, role: user.role, employeeId: user.employeeId };
+    const payload = {
+      sub: user.id,
+      role: user.role,
+      employeeId: user.employeeId,
+    };
     return {
       access_token: this.jwtService.sign(payload),
     };

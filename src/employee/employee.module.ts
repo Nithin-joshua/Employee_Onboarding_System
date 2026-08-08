@@ -13,11 +13,7 @@ import { DbModule } from '../db/db.module';
 import { EmailModule } from '../email/email.module';
 
 @Module({
-  imports: [
-    forwardRef(() => ComplianceModule),
-    DbModule,
-    EmailModule,
-  ],
+  imports: [forwardRef(() => ComplianceModule), DbModule, EmailModule],
   controllers: [
     EmployeeController,
     InvitationController,
@@ -39,5 +35,3 @@ import { EmailModule } from '../email/email.module';
   ],
 })
 export class EmployeeModule {}
-
-

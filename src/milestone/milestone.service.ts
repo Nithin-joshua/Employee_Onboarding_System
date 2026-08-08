@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DbService } from '../db/db.service';
 import { AuditLogService } from '../db/audit-log.service';
 import { Employee, Milestone } from '../interfaces/types.interface';
@@ -24,7 +29,7 @@ export function mapMilestone(m: any): Milestone {
     id: m.id,
     employeeId: m.employeeId,
     type: mapPrismaTypeToMilestoneType(m.type),
-    status: m.status as any,
+    status: m.status,
     dueDate: m.dueDate instanceof Date ? m.dueDate.toISOString() : m.dueDate,
     checklist: m.checklist as string[],
   };
@@ -59,7 +64,9 @@ export class MilestoneService {
     if (allowed.includes('MANAGER') && role === 'MANAGER') {
       return;
     }
-    throw new ForbiddenException(`Role ${role} is not authorized for milestone actions`);
+    throw new ForbiddenException(
+      `Role ${role} is not authorized for milestone actions`,
+    );
   }
 
   // Create milestones when entering DAY1_READY
@@ -85,7 +92,11 @@ export class MilestoneService {
   }
 
   // DAY1_READY -> ACTIVE -> MILESTONE_30 -> MILESTONE_60 -> MILESTONE_90 -> ONBOARDING_COMPLETE
-  async completeMilestone(employeeId: string, type: 'DAY1' | '30' | '60' | '90', role: string): Promise<Employee> {
+  async completeMilestone(
+    employeeId: string,
+    type: 'DAY1' | '30' | '60' | '90',
+    role: string,
+  ): Promise<Employee> {
     const employee = await this.getEmployeeOrThrow(employeeId);
     this.validateRole(role, ['HR', 'MANAGER']);
 
@@ -95,61 +106,83 @@ export class MilestoneService {
     });
 
     if (!milestone) {
-      throw new NotFoundException(`Milestone of type ${type} not found for employee ${employeeId}`);
+      throw new NotFoundException(
+        `Milestone of type ${type} not found for employee ${employeeId}`,
+      );
     }
 
     if (milestone.status === 'DONE') {
-      throw new ConflictException(`Milestone of type ${type} is already completed`);
+      throw new ConflictException(
+        `Milestone of type ${type} is already completed`,
+      );
     }
 
     // Validate state transition
     let targetStatus = employee.status;
     if (type === 'DAY1') {
       if (employee.status !== 'DAY1_READY') {
-        throw new ConflictException(`Cannot complete DAY1. Employee status is ${employee.status}`);
+        throw new ConflictException(
+          `Cannot complete DAY1. Employee status is ${employee.status}`,
+        );
       }
       targetStatus = 'ACTIVE';
     } else if (type === '30') {
       if (employee.status !== 'ACTIVE') {
-        throw new ConflictException(`Cannot complete 30. Employee status is ${employee.status}`);
+        throw new ConflictException(
+          `Cannot complete 30. Employee status is ${employee.status}`,
+        );
       }
       targetStatus = 'MILESTONE_30';
     } else if (type === '60') {
       if (employee.status !== 'MILESTONE_30') {
-        throw new ConflictException(`Cannot complete 60. Employee status is ${employee.status}`);
+        throw new ConflictException(
+          `Cannot complete 60. Employee status is ${employee.status}`,
+        );
       }
       targetStatus = 'MILESTONE_60';
     } else if (type === '90') {
-      if (employee.status !== 'MILESTONE_60' && employee.status !== 'MILESTONE_90') {
-        throw new ConflictException(`Cannot complete 90. Employee status is ${employee.status}`);
+      if (
+        employee.status !== 'MILESTONE_60' &&
+        employee.status !== 'MILESTONE_90'
+      ) {
+        throw new ConflictException(
+          `Cannot complete 90. Employee status is ${employee.status}`,
+        );
       }
       targetStatus = 'ONBOARDING_COMPLETE';
     }
 
-    await this.db.milestone.update({
-      where: { id: milestone.id },
-      data: { status: 'DONE' },
-    });
+    const updated = await this.db.$transaction(async (tx) => {
+      await tx.milestone.update({
+        where: { id: milestone.id },
+        data: { status: 'DONE' },
+      });
 
-    const updated = await this.db.employee.update({
-      where: { id: employeeId },
-      data: {
-        status: targetStatus,
-      },
-      include: {
-        documents: true,
-        complianceForms: true,
-        milestones: true,
-      },
-    });
+      const emp = await tx.employee.update({
+        where: { id: employeeId },
+        data: {
+          status: targetStatus,
+        },
+        include: {
+          documents: true,
+          complianceForms: true,
+          milestones: true,
+        },
+      });
 
-    await this.auditLogService.createLog({
-      employeeId,
-      fromStatus: employee.status,
-      toStatus: targetStatus,
-      actorId: role === 'NEW_HIRE' ? employeeId : 'MANAGER_PORTAL',
-      actorRole: role as any,
-      note: `Milestone ${type} completed.`,
+      await this.auditLogService.createLog(
+        {
+          employeeId,
+          fromStatus: employee.status,
+          toStatus: targetStatus,
+          actorId: role === 'NEW_HIRE' ? employeeId : 'MANAGER_PORTAL',
+          actorRole: role as any,
+          note: `Milestone ${type} completed.`,
+        },
+        tx,
+      );
+
+      return emp;
     });
 
     return mapEmployee(updated);

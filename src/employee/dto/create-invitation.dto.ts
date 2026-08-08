@@ -12,7 +12,10 @@ export class CreateInvitationDto {
   @IsNotEmpty()
   department: string;
 
-  @ApiProperty({ example: 'manager-uuid-here', description: 'ID of the manager' })
+  @ApiProperty({
+    example: 'manager-uuid-here',
+    description: 'ID of the manager',
+  })
   @IsString()
   @IsNotEmpty()
   managerId: string;

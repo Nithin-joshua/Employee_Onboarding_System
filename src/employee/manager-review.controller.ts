@@ -1,4 +1,12 @@
-import { Controller, Post, Body, Param, Req, ForbiddenException, ConflictException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Param,
+  Req,
+  ForbiddenException,
+  ConflictException,
+} from '@nestjs/common';
 import { DbService } from '../db/db.service';
 import { AuditLogService } from '../db/audit-log.service';
 import { Roles } from '../auth/roles.decorator';
@@ -7,7 +15,13 @@ import { EmailService } from '../email/email.service';
 import { mapEmployee } from './employee.service';
 import { OutboxService } from './outbox.service';
 import { RejectHireDto } from './dto/reject-hire.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 
 @ApiTags('Employee')
 @ApiBearerAuth()
@@ -24,9 +38,18 @@ export class ManagerReviewController {
   @Roles('MANAGER')
   @ApiOperation({ summary: 'Approve an employee hire (Manager review)' })
   @ApiParam({ name: 'employeeId', description: 'Employee ID' })
-  @ApiResponse({ status: 200, description: 'Employee hire approved successfully.' })
-  @ApiResponse({ status: 400, description: 'Invalid status transition or validation failure.' })
-  @ApiResponse({ status: 403, description: 'Access forbidden / Not the assigned manager.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Employee hire approved successfully.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid status transition or validation failure.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Access forbidden / Not the assigned manager.',
+  })
   @Post('approve-hire')
   async approveHire(@Param('employeeId') employeeId: string, @Req() req: any) {
     const employee = await this.db.employee.findUnique({
@@ -42,11 +65,15 @@ export class ManagerReviewController {
     const managerId = req.user.employeeId || req.user.userId;
 
     if (job.managerId !== managerId) {
-      throw new ForbiddenException('Only the assigned manager can approve this hire');
+      throw new ForbiddenException(
+        'Only the assigned manager can approve this hire',
+      );
     }
 
     if (employee.status !== 'MANAGER_REVIEW') {
-      throw new ConflictException(`Cannot approve hire. Employee status is ${employee.status}`);
+      throw new ConflictException(
+        `Cannot approve hire. Employee status is ${employee.status}`,
+      );
     }
 
     // Transition: MANAGER_REVIEW -> COMPLIANCE_PROCESSING inside a transaction with OutboxEvent
@@ -59,23 +86,30 @@ export class ManagerReviewController {
         include: { documents: true, complianceForms: true, milestones: true },
       });
 
-      await this.auditLogService.createLog({
-        employeeId,
-        fromStatus: employee.status,
-        toStatus: 'COMPLIANCE_PROCESSING',
-        actorId: managerId,
-        actorRole: 'MANAGER',
-        note: 'Manager approved employee documents and details',
-      }, tx);
+      await this.auditLogService.createLog(
+        {
+          employeeId,
+          fromStatus: employee.status,
+          toStatus: 'COMPLIANCE_PROCESSING',
+          actorId: managerId,
+          actorRole: 'MANAGER',
+          note: 'Manager approved employee documents and details',
+        },
+        tx,
+      );
 
       const personal = employee.personal as any;
-      await this.outboxService.createAndEmitEvent(tx, 'employee.status_changed', {
-        employeeId,
-        fromStatus: employee.status,
-        toStatus: 'COMPLIANCE_PROCESSING',
-        email: personal.email,
-        name: personal.name,
-      });
+      await this.outboxService.createAndEmitEvent(
+        tx,
+        'employee.status_changed',
+        {
+          employeeId,
+          fromStatus: employee.status,
+          toStatus: 'COMPLIANCE_PROCESSING',
+          email: personal.email,
+          name: personal.name,
+        },
+      );
 
       return emp;
     });
@@ -86,9 +120,18 @@ export class ManagerReviewController {
   @Roles('MANAGER')
   @ApiOperation({ summary: 'Reject an employee hire (Manager review)' })
   @ApiParam({ name: 'employeeId', description: 'Employee ID' })
-  @ApiResponse({ status: 200, description: 'Employee hire rejected successfully.' })
-  @ApiResponse({ status: 400, description: 'Invalid status transition or validation failure.' })
-  @ApiResponse({ status: 403, description: 'Access forbidden / Not the assigned manager.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Employee hire rejected successfully.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid status transition or validation failure.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Access forbidden / Not the assigned manager.',
+  })
   @Post('reject-hire')
   async rejectHire(
     @Param('employeeId') employeeId: string,
@@ -108,11 +151,15 @@ export class ManagerReviewController {
     const managerId = req.user.employeeId || req.user.userId;
 
     if (job.managerId !== managerId) {
-      throw new ForbiddenException('Only the assigned manager can reject this hire');
+      throw new ForbiddenException(
+        'Only the assigned manager can reject this hire',
+      );
     }
 
     if (employee.status !== 'MANAGER_REVIEW') {
-      throw new ConflictException(`Cannot reject hire. Employee status is ${employee.status}`);
+      throw new ConflictException(
+        `Cannot reject hire. Employee status is ${employee.status}`,
+      );
     }
 
     // Transition: MANAGER_REVIEW -> UNDER_REVIEW

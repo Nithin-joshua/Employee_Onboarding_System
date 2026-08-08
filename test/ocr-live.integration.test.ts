@@ -25,16 +25,23 @@ describe('Live OCR Integration Test (Manual)', () => {
       !process.env.SUPABASE_URL ||
       process.env.SUPABASE_URL.includes('mock')
     ) {
-      console.warn('Skipping live OCR test: MISTRAL_API_KEY or SUPABASE_URL is not configured with real values');
+      console.warn(
+        'Skipping live OCR test: MISTRAL_API_KEY or SUPABASE_URL is not configured with real values',
+      );
       return;
     }
 
     const docType = 'PAN';
     const employeeId = 'test_integration_emp';
     const sampleBuffer = Buffer.from('%PDF-1.4 ... mock pdf content ...');
-    
+
     // 1. Upload to Supabase Storage
-    const storagePath = await storageService.uploadDocument(employeeId, docType, sampleBuffer, 'application/pdf');
+    const storagePath = await storageService.uploadDocument(
+      employeeId,
+      docType,
+      sampleBuffer,
+      'application/pdf',
+    );
     expect(storagePath).toBeDefined();
 
     // 2. Perform OCR

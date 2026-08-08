@@ -1,9 +1,22 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+/**
+ * EmailService sends transactional emails via the Brevo API.
+ *
+ * Email sending mode is controlled by:
+ *   - If BREVO_API_KEY is not set: logs emails to console (dev/test convenience).
+ *   - If BREVO_API_KEY is set: sends real emails via Brevo SMTP API.
+ *
+ * To suppress real email sending in development, simply omit BREVO_API_KEY
+ * from your .env file. Do NOT use placeholder key values.
+ */
 @Injectable()
 export class EmailService {
-  private readonly logger = new Logger(EmailService.name);
-  private readonly apiKey = process.env.BREVO_API_KEY;
+  private readonly logger = {
+    log: (msg: string) => console.log(`[EmailService] ${msg}`),
+    error: (msg: string) => console.error(`[EmailService] ${msg}`),
+  };
+  private readonly apiKey = process.env.BREVO_API_KEY || '';
 
   async sendOtp(email: string, otp: string): Promise<void> {
     const htmlContent = `
@@ -29,10 +42,18 @@ export class EmailService {
         </body>
       </html>
     `;
-    await this.sendMail(email, 'Hiring Confirmed - Welcome to the Team!', htmlContent);
+    await this.sendMail(
+      email,
+      'Hiring Confirmed - Welcome to the Team!',
+      htmlContent,
+    );
   }
 
-  async sendOnboardingInvite(email: string, name: string, tempPassword: string): Promise<void> {
+  async sendOnboardingInvite(
+    email: string,
+    name: string,
+    tempPassword: string,
+  ): Promise<void> {
     const htmlContent = `
       <html>
         <body>
@@ -44,12 +65,19 @@ export class EmailService {
         </body>
       </html>
     `;
-    await this.sendMail(email, 'Your Onboarding Account Credentials', htmlContent);
+    await this.sendMail(
+      email,
+      'Your Onboarding Account Credentials',
+      htmlContent,
+    );
   }
 
   private async sendMail(to: string, subject: string, htmlContent: string) {
-    if (!this.apiKey || this.apiKey === 'mock_brevo_api_key_for_testing') {
-      this.logger.log(`[MOCK EMAIL] To: ${to} | Subject: ${subject}`);
+    if (!this.apiKey) {
+      // No API key configured — log to console. Set BREVO_API_KEY in .env to send real emails.
+      console.log(
+        `[EmailService] [LOG MODE] To: ${to} | Subject: ${subject} | (Set BREVO_API_KEY in .env to enable real email delivery)`,
+      );
       return;
     }
 
@@ -61,7 +89,10 @@ export class EmailService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          sender: { name: 'Onboarding System', email: 'no-reply@onboarding.com' },
+          sender: {
+            name: 'Onboarding System',
+            email: 'no-reply@onboarding.com',
+          },
           to: [{ email: to }],
           subject,
           htmlContent,
@@ -70,12 +101,16 @@ export class EmailService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        this.logger.error(`Brevo API Error: ${response.status} - ${errorText}`);
+        console.error(
+          `[EmailService] Brevo API Error: ${response.status} - ${errorText}`,
+        );
       } else {
-        this.logger.log(`Email successfully sent to ${to} via Brevo`);
+        console.log(`[EmailService] Email sent to ${to} via Brevo`);
       }
     } catch (error) {
-      this.logger.error(`Failed to send email to ${to}: ${error.message}`);
+      console.error(
+        `[EmailService] Failed to send email to ${to}: ${(error as Error).message}`,
+      );
     }
   }
 }

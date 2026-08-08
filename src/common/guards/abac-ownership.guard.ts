@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { DbService } from '../../db/db.service';
 
 @Injectable()
@@ -16,7 +21,9 @@ export class AbacOwnershipGuard implements CanActivate {
 
     if (user.role === 'NEW_HIRE') {
       if (employeeId && user.employeeId !== employeeId) {
-        throw new ForbiddenException('Access denied: You can only access your own record.');
+        throw new ForbiddenException(
+          'Access denied: You can only access your own record.',
+        );
       }
     }
 
@@ -29,7 +36,9 @@ export class AbacOwnershipGuard implements CanActivate {
           const job = employee.job as any;
           const managerId = user.employeeId || user.userId;
           if (job?.managerId !== managerId) {
-            throw new ForbiddenException('Access denied: You are not the assigned manager for this employee.');
+            throw new ForbiddenException(
+              'Access denied: You are not the assigned manager for this employee.',
+            );
           }
         }
       }

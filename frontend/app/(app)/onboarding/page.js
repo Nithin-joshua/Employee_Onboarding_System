@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { request } from '../../../lib/apiClient';
@@ -13,7 +13,7 @@ export default function Onboarding() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
 
-  const fetchOnboardingStatus = async () => {
+  const fetchOnboardingStatus = useCallback(async () => {
     if (!session?.user?.employeeId) {
       setError('Employee profile not linked to this user account');
       setLoading(false);
@@ -28,12 +28,12 @@ export default function Onboarding() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session]);
 
   useEffect(() => {
     if (!session) return;
     fetchOnboardingStatus();
-  }, [session]);
+  }, [session, fetchOnboardingStatus]);
 
   const handleRunExtraction = async () => {
     setActionLoading(true);

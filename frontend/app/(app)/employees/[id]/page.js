@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState, use, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { request } from '../../../../lib/apiClient';
@@ -16,7 +16,7 @@ export default function EmployeeDetail({ params: paramsPromise }) {
   const [rejectionReason, setRejectionReason] = useState({});
   const [actionMessage, setActionMessage] = useState(null);
 
-  const fetchEmployee = async () => {
+  const fetchEmployee = useCallback(async () => {
     try {
       setLoading(true);
       const data = await request(`/employees/${params.id}`, { method: 'GET' }, session);
@@ -27,12 +27,12 @@ export default function EmployeeDetail({ params: paramsPromise }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id, session]);
 
   useEffect(() => {
     if (!session || !params.id) return;
     fetchEmployee();
-  }, [session, params.id]);
+  }, [session, params.id, fetchEmployee]);
 
   const handleApproveReview = async () => {
     setActionLoading(true);

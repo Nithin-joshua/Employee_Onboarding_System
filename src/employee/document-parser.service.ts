@@ -25,13 +25,17 @@ export class DocumentParserService {
       }
 
       // Name Matcher heuristics:
-      const nameMatch = text.match(/(?:Name|NAME)\s*:\s*([^\n\r]+)/i) || text.match(/(?:Name|NAME)\s+([A-Za-z\s]+)/i);
+      const nameMatch =
+        text.match(/(?:Name|NAME)\s*:\s*([^\n\r]+)/i) ||
+        text.match(/(?:Name|NAME)\s+([A-Za-z\s]+)/i);
       if (nameMatch && nameMatch[1]) {
         metadata.name = nameMatch[1].trim();
       }
 
       // DOB Matcher:
-      const dobMatch = text.match(/(?:DOB|D\.O\.B|Birth|Born)\s*:\s*([^\n\r]+)/i) || text.match(/(\d{2}[-/]\d{2}[-/]\d{4})/);
+      const dobMatch =
+        text.match(/(?:DOB|D\.O\.B|Birth|Born)\s*:\s*([^\n\r]+)/i) ||
+        text.match(/(\d{2}[-/]\d{2}[-/]\d{4})/);
       if (dobMatch) {
         metadata.dob = dobMatch[1]?.trim() || dobMatch[0];
       }

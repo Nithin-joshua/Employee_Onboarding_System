@@ -16,17 +16,16 @@ export class AuditLogService {
       actorRole: Role;
       note?: string;
     },
-    tx?: any
+    tx?: any,
   ): Promise<AuditLog> {
     const runInTx = async (prismaTx: any) => {
       // Lock the AuditLog table to prevent race conditions from concurrent updates
-      await prismaTx.$executeRawUnsafe('LOCK TABLE "AuditLog" IN EXCLUSIVE MODE');
+      await prismaTx.$executeRawUnsafe(
+        'LOCK TABLE "AuditLog" IN EXCLUSIVE MODE',
+      );
 
       const latestLogs = await prismaTx.auditLog.findMany({
-        orderBy: [
-          { timestamp: 'desc' },
-          { id: 'desc' },
-        ],
+        orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
         take: 1,
       });
 
@@ -46,7 +45,10 @@ export class AuditLogService {
       };
 
       const hashInput = previousHash + JSON.stringify(eventData) + timestampStr;
-      const currentHash = crypto.createHash('sha256').update(hashInput).digest('hex');
+      const currentHash = crypto
+        .createHash('sha256')
+        .update(hashInput)
+        .digest('hex');
 
       return await prismaTx.auditLog.create({
         data: {
@@ -67,12 +69,12 @@ export class AuditLogService {
     }
   }
 
-  async verifyChainIntegrity(): Promise<{ isTampered: boolean; brokenIndex?: number }> {
+  async verifyChainIntegrity(): Promise<{
+    isTampered: boolean;
+    brokenIndex?: number;
+  }> {
     const logs = await this.db.auditLog.findMany({
-      orderBy: [
-        { timestamp: 'asc' },
-        { id: 'asc' },
-      ],
+      orderBy: [{ timestamp: 'asc' }, { id: 'asc' }],
     });
 
     let expectedPreviousHash = '0';
@@ -94,8 +96,12 @@ export class AuditLogService {
       };
 
       const timestampStr = new Date(log.timestamp).toISOString();
-      const hashInput = log.previousHash + JSON.stringify(eventData) + timestampStr;
-      const computedHash = crypto.createHash('sha256').update(hashInput).digest('hex');
+      const hashInput =
+        log.previousHash + JSON.stringify(eventData) + timestampStr;
+      const computedHash = crypto
+        .createHash('sha256')
+        .update(hashInput)
+        .digest('hex');
 
       if (log.currentHash !== computedHash) {
         return { isTampered: true, brokenIndex: i };

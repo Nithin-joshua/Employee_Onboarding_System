@@ -1,4 +1,14 @@
-import { Controller, Post, Body, Param, Get, Req, ForbiddenException, Res, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Param,
+  Get,
+  Req,
+  ForbiddenException,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ComplianceService } from './compliance.service';
 import { SignFormDto } from '../employee/dto/transitions.dto';
 import { Roles } from '../auth/roles.decorator';
@@ -40,7 +50,12 @@ export class ComplianceController {
     if (req.user.role === 'NEW_HIRE' && req.user.employeeId !== employeeId) {
       throw new ForbiddenException('Forbidden resource');
     }
-    return this.complianceService.signForm(employeeId, formId, dto.signedBy, req.user.role);
+    return this.complianceService.signForm(
+      employeeId,
+      formId,
+      dto.signedBy,
+      req.user.role,
+    );
   }
 
   @Roles('NEW_HIRE', 'HR', 'MANAGER')
@@ -55,7 +70,7 @@ export class ComplianceController {
       throw new ForbiddenException('Forbidden resource');
     }
     const employee = await this.employeeService.getEmployee(employeeId);
-    
+
     // Prepare candidate info
     const personal = employee.personal as any;
     const job = employee.job as any;
@@ -70,12 +85,18 @@ export class ComplianceController {
     };
 
     const forms = await this.complianceService.getEmployeeForms(employeeId);
-    const form = forms.find(f => f.id === formId);
+    const form = forms.find((f) => f.id === formId);
     const formType = form ? form.type : 'STATUTORY_FORM';
 
-    const pdfBuffer = await this.pdfGeneratorService.generateFormPDF(formType, candidateInfo);
+    const pdfBuffer = await this.pdfGeneratorService.generateFormPDF(
+      formType,
+      candidateInfo,
+    );
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=${formType}_${employeeId}.pdf`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=${formType}_${employeeId}.pdf`,
+    );
     res.end(pdfBuffer);
   }
 }

@@ -1,4 +1,12 @@
-import { Controller, Post, Body, Param, Get, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Param,
+  Get,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { MilestoneService } from './milestone.service';
 import { CompleteMilestoneDto } from '../employee/dto/transitions.dto';
 import { Roles } from '../auth/roles.decorator';
@@ -22,6 +30,10 @@ export class MilestoneController {
     @Body() dto: CompleteMilestoneDto,
     @Req() req: any,
   ) {
-    return this.milestoneService.completeMilestone(employeeId, dto.type, req.user.role);
+    return this.milestoneService.completeMilestone(
+      employeeId,
+      dto.type,
+      req.user.role,
+    );
   }
 }
