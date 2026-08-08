@@ -5,11 +5,12 @@ import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { DbService } from '../src/db/db.service';
 import { StorageService } from '../src/document/storage.service';
-import { MockOcrService } from '../src/document/ocr.service';
+import { OcrService } from '../src/document/ocr.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as bcrypt from 'bcrypt';
 import { ComplianceRuleService } from '../src/employee/compliance-rule.service';
+import { EmailService } from '../src/email/email.service';
 
 describe('Employee Onboarding Workflow (e2e)', () => {
   let app: INestApplication<App>;
@@ -41,7 +42,7 @@ describe('Employee Onboarding Workflow (e2e)', () => {
           .fn()
           .mockResolvedValue('https://mock-signed-url.com/doc.pdf'),
       })
-      .overrideProvider(MockOcrService)
+      .overrideProvider(OcrService)
       .useValue({
         extract: jest.fn().mockImplementation(async (doc: any) => {
           const filePath = path.join(
@@ -57,6 +58,12 @@ describe('Employee Onboarding Workflow (e2e)', () => {
             confidence: data.confidence,
           };
         }),
+      })
+      .overrideProvider(EmailService)
+      .useValue({
+        sendOtp: jest.fn().mockResolvedValue(undefined),
+        sendHireConfirmation: jest.fn().mockResolvedValue(undefined),
+        sendOnboardingInvite: jest.fn().mockResolvedValue(undefined),
       })
       .compile();
 

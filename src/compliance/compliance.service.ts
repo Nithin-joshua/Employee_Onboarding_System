@@ -11,17 +11,18 @@ import { MilestoneService } from '../milestone/milestone.service';
 import { mapEmployee, EmployeeService } from '../employee/employee.service';
 import { ComplianceRuleService } from '../employee/compliance-rule.service';
 import * as crypto from 'crypto';
+import { ComplianceForm as PrismaComplianceForm } from '@prisma/client';
 
 export function computeComplianceLogic(employee: Employee): {
   pfApplicable: boolean;
   esiApplicable: boolean;
 } {
   const pfApplicable = true; // assume org >=20 employees
-  const esiApplicable = employee.job.salary <= 21000;
+  const esiApplicable = (employee.job.salary ?? 0) <= 21000;
   return { pfApplicable, esiApplicable };
 }
 
-export function mapComplianceForm(cf: any): ComplianceForm {
+export function mapComplianceForm(cf: PrismaComplianceForm): ComplianceForm {
   return {
     id: cf.id,
     employeeId: cf.employeeId,
@@ -29,7 +30,7 @@ export function mapComplianceForm(cf: any): ComplianceForm {
     status: cf.status,
     deadline:
       cf.deadline instanceof Date ? cf.deadline.toISOString() : cf.deadline,
-    data: cf.data,
+    data: cf.data as Record<string, unknown>,
   };
 }
 
@@ -97,7 +98,7 @@ export class ComplianceService {
         // Evaluate eligibility and generate forms inline in transaction
         const { requiredForms } =
           await this.complianceRuleService.evaluateEligibility(
-            employee.job.salary,
+            employee.job.salary ?? 0,
             tx,
           );
 
@@ -113,8 +114,13 @@ export class ComplianceService {
                 data: {},
               },
             });
-          } catch (err: any) {
-            if (err.code === 'P2002') {
+          } catch (err: unknown) {
+            if (
+              err &&
+              typeof err === 'object' &&
+              'code' in err &&
+              err.code === 'P2002'
+            ) {
               continue;
             }
             throw err;
@@ -261,7 +267,7 @@ export class ComplianceService {
             data: {
               id: crypto.randomUUID(),
               employeeId,
-              type: prismaType as any,
+              type: prismaType,
               status: 'PENDING',
               dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
               checklist: [],

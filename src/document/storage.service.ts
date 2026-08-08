@@ -114,7 +114,8 @@ export class StorageService {
 
       const chunks: Buffer[] = [];
       for await (const chunk of decryptedStream) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        chunks.push(buf);
       }
       return Buffer.concat(chunks);
     }

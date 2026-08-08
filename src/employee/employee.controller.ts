@@ -6,7 +6,6 @@ import {
   Param,
   Req,
   UseGuards,
-  Res,
   Sse,
   MessageEvent,
 } from '@nestjs/common';
@@ -26,7 +25,7 @@ import { PdfGeneratorService } from './pdf-generator.service';
 import { EmployeeStatusListener } from './employee-status.listener';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import type { Response } from 'express';
+import type { AuthenticatedRequest } from '../interfaces/types.interface';
 
 @ApiTags('Employee')
 @ApiBearerAuth()
@@ -78,7 +77,7 @@ export class EmployeeController {
     description: 'Preboarding link opened and status updated.',
   })
   @Post('employees/:id/open-preboarding')
-  openPreboarding(@Param('id') id: string, @Req() req: any) {
+  openPreboarding(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.employeeService.openPreboardingLink(id, req.user.role);
   }
 

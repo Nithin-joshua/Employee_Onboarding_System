@@ -5,6 +5,13 @@ import { ComplianceService } from '../compliance/compliance.service';
 import { EmailService } from '../email/email.service';
 import { Subject } from 'rxjs';
 
+interface StatusChangedPayload {
+  employeeId: string;
+  toStatus: string;
+  email?: string;
+  name?: string;
+}
+
 @Injectable()
 export class EmployeeStatusListener {
   private readonly logger = new Logger(EmployeeStatusListener.name);
@@ -24,7 +31,7 @@ export class EmployeeStatusListener {
   async handleEmployeeStatusChanged(event: {
     id: string;
     eventType: string;
-    payload: any;
+    payload: StatusChangedPayload;
   }) {
     this.logger.log(
       `Received outbox event: ${event.id} of type ${event.eventType}`,

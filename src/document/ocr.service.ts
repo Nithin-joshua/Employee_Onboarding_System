@@ -1,6 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import { Document } from '../interfaces/types.interface';
 import { StorageService } from './storage.service';
 import { AadhaarSchema } from './ocr-schemas/aadhaar.schema';
@@ -26,11 +24,6 @@ import { PhotoSchema } from './ocr-schemas/photo.schema';
  *
  * There is no silent fallback. Missing configuration produces a runtime error.
  */
-
-interface OcrSeedFile {
-  fields: Record<string, unknown>;
-  confidence?: number;
-}
 
 interface MistralOcrResponse {
   documentAnnotation: string | Record<string, unknown>;
@@ -106,54 +99,17 @@ function averageBlockConfidence(response: MistralOcrResponse): number {
 
 @Injectable()
 export class OcrService {
-  constructor(private readonly storageService: StorageService) {}
-
-  async extract(doc: Document): Promise<OcrResult> {
-    const mode = process.env.OCR_MODE || 'mistral';
-
-    if (mode === 'local') {
-      return this.extractFromLocalSeedData(doc.type);
+  constructor(private readonly storageService: StorageService) {
+    if (!process.env.MISTRAL_API_KEY && process.env.NODE_ENV !== 'test') {
+      throw new Error(
+        'Configuration Error: MISTRAL_API_KEY environment variable is missing. ' +
+          'Please set it to enable Mistral OCR API integration.',
+      );
     }
-
-    return this.extractViaMistralApi(doc);
   }
 
-  /**
-   * Reads pre-extracted OCR data from prisma/seed-data/ocr/<TYPE>.json.
-   * Used during local development (OCR_MODE=local).
-   * Fails clearly if the file does not exist.
-   */
-  private async extractFromLocalSeedData(docType: string): Promise<OcrResult> {
-    const filePath = path.join(
-      process.cwd(),
-      'prisma',
-      'seed-data',
-      'ocr',
-      `${docType.toUpperCase()}.json`,
-    );
-
-    let data: OcrSeedFile;
-    try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      data = JSON.parse(content) as OcrSeedFile;
-    } catch (err) {
-      throw new Error(
-        `OCR_MODE=local but seed data file not found at "${filePath}". ` +
-          `Create prisma/seed-data/ocr/${docType.toUpperCase()}.json with the expected extracted fields. ` +
-          `Original error: ${(err as Error).message}`,
-      );
-    }
-
-    if (!data.fields || typeof data.fields !== 'object') {
-      throw new Error(
-        `OCR seed data file "${filePath}" must contain a "fields" object.`,
-      );
-    }
-
-    return {
-      fields: data.fields,
-      confidence: typeof data.confidence === 'number' ? data.confidence : 0.95,
-    };
+  async extract(doc: Document): Promise<OcrResult> {
+    return this.extractViaMistralApi(doc);
   }
 
   /**
@@ -164,8 +120,7 @@ export class OcrService {
     const apiKey = process.env.MISTRAL_API_KEY;
     if (!apiKey) {
       throw new Error(
-        'MISTRAL_API_KEY environment variable is required when OCR_MODE=mistral. ' +
-          'Set it in your .env file (see .env.example), or set OCR_MODE=local for local development.',
+        'Configuration Error: MISTRAL_API_KEY environment variable is required to call Mistral OCR API.',
       );
     }
 

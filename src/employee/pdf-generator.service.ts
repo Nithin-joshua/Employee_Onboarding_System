@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import * as PDFDocument from 'pdfkit';
+import PDFDocument from 'pdfkit';
 
 @Injectable()
 export class PdfGeneratorService {
@@ -17,7 +17,7 @@ export class PdfGeneratorService {
   ): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       // Use the default export constructor or standard class constructor
-      const doc = new (PDFDocument as any)({ size: 'A4', margin: 50 });
+      const doc = new PDFDocument({ size: 'A4', margin: 50 });
       const chunks: Buffer[] = [];
 
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -59,7 +59,8 @@ export class PdfGeneratorService {
       items.forEach((item) => {
         doc
           .fontSize(11)
-          .text(`${item.label}:`, { continued: true, bold: true })
+          .font('Helvetica-Bold')
+          .text(`${item.label}:`, { continued: true })
           .font('Helvetica')
           .text(` ${item.val}`);
         doc.moveDown(0.5);

@@ -70,4 +70,58 @@ describe('AuditLogService', () => {
     expect(integrityAfter.isTampered).toBe(true);
     expect(integrityAfter.brokenIndex).toBe(1); // Second element (index 1) is broken
   });
+
+  it('should support createLog running inside a passed transaction tx client', async () => {
+    await db.$transaction(async (tx) => {
+      const log = await service.createLog(
+        {
+          employeeId: 'emp-tx',
+          fromStatus: 'INVITED',
+          toStatus: 'DOCUMENTS_PENDING',
+          actorId: 'hr-1',
+          actorRole: 'HR',
+          note: 'Log within tx',
+        },
+        tx,
+      );
+      expect(log.id).toBeDefined();
+      expect(log.employeeId).toBe('emp-tx');
+    });
+  });
+
+  it('should detect mismatched previousHash and verify chain integrity with count', async () => {
+    // 1. Create a valid chain of 2 logs
+    await service.createLog({
+      employeeId: 'emp-3',
+      fromStatus: 'REGISTERED',
+      toStatus: 'INVITED',
+      actorId: 'hr-1',
+      actorRole: 'HR',
+    });
+
+    const log2 = await service.createLog({
+      employeeId: 'emp-3',
+      fromStatus: 'INVITED',
+      toStatus: 'DOCUMENTS_PENDING',
+      actorId: 'hr-1',
+      actorRole: 'HR',
+    });
+
+    // Verify valid chain with count
+    const validResult = await service.verifyChainIntegrityWithCount();
+    expect(validResult.isValid).toBe(true);
+    expect(validResult.totalLogsVerified).toBe(2);
+
+    // 2. Corrupt previousHash of log2
+    await db.auditLog.update({
+      where: { id: log2.id },
+      data: { previousHash: 'mismatched-hash-value' },
+    });
+
+    // Verify invalid chain (previousHash mismatch)
+    const invalidResult = await service.verifyChainIntegrityWithCount();
+    expect(invalidResult.isValid).toBe(false);
+    expect(invalidResult.isTampered).toBe(true);
+    expect(invalidResult.brokenIndex).toBe(1);
+  });
 });

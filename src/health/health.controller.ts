@@ -16,7 +16,7 @@ export class HealthController {
     let dbStatus = 'UP';
     try {
       await this.dbService.$queryRaw`SELECT 1`;
-    } catch (error) {
+    } catch {
       dbStatus = 'DOWN';
     }
 

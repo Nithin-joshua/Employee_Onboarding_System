@@ -13,6 +13,7 @@ import { ComplianceService } from '../compliance/compliance.service';
 import { mapEmployee } from '../employee/employee.service';
 import { DocumentParserService } from '../employee/document-parser.service';
 import * as crypto from 'crypto';
+import { DocumentType, Role, Prisma } from '@prisma/client';
 
 const REQUIRED_DOC_TYPES = [
   'AADHAAR',
@@ -100,7 +101,7 @@ export class DocumentService {
           data: {
             id: crypto.randomUUID(),
             employeeId: employeeId,
-            type: docType as any,
+            type: docType as DocumentType,
             status: 'SUBMITTED',
             extracted: undefined,
             reviewedBy: null,
@@ -158,7 +159,7 @@ export class DocumentService {
       // In case storagePath isn't populated (e.g. from custom workflow), assign fallback
       const storagePath = doc.storagePath || `${employeeId}/${doc.type}.pdf`;
 
-      let result: { fields: Record<string, any>; confidence: number };
+      let result: { fields: Record<string, unknown>; confidence: number };
 
       if (storagePath.startsWith('uploads/')) {
         try {
@@ -170,7 +171,7 @@ export class DocumentService {
             );
           result = {
             fields,
-            confidence: fields.confidence ?? 1.0,
+            confidence: (fields.confidence as number) ?? 1.0,
           };
         } catch (err) {
           result = {
@@ -181,16 +182,23 @@ export class DocumentService {
           };
         }
       } else {
-        result = await this.ocrService.extract({
-          ...doc,
+        const inputDoc: Document = {
+          id: doc.id,
+          employeeId: doc.employeeId,
+          type: doc.type,
+          status: doc.status,
+          extracted: doc.extracted as Record<string, unknown> | null,
+          reviewedBy: doc.reviewedBy,
+          rejectionReason: doc.rejectionReason,
           storagePath,
-        } as any);
+        };
+        result = await this.ocrService.extract(inputDoc);
       }
 
       await this.db.document.update({
         where: { id: doc.id },
         data: {
-          extracted: result.fields as any,
+          extracted: result.fields as Prisma.InputJsonValue,
           status: 'EXTRACTED',
           storagePath,
         },
@@ -310,7 +318,7 @@ export class DocumentService {
           fromStatus: employee.status,
           toStatus: 'DOCUMENTS_PENDING',
           actorId: role,
-          actorRole: role as any,
+          actorRole: role as Role,
           note: `Document rejected: ${doc.type}. Reason: ${reason}`,
         },
         tx,
@@ -365,7 +373,7 @@ export class DocumentService {
           fromStatus: employee.status,
           toStatus: 'MANAGER_REVIEW',
           actorId: role,
-          actorRole: role as any,
+          actorRole: role as Role,
           note: 'HR approved all documents, routing to manager for review',
         },
         tx,
@@ -384,9 +392,9 @@ export class DocumentService {
     return docs.map((doc) => ({
       id: doc.id,
       employeeId: doc.employeeId,
-      type: doc.type as any,
-      status: doc.status as any,
-      extracted: doc.extracted as any,
+      type: doc.type,
+      status: doc.status,
+      extracted: doc.extracted as Record<string, unknown> | null,
       reviewedBy: doc.reviewedBy,
       rejectionReason: doc.rejectionReason,
       storagePath: doc.storagePath,
@@ -399,8 +407,8 @@ export class DocumentService {
     });
 
     return docs.map((doc) => {
-      const extracted = (doc.extracted || {}) as Record<string, any>;
-      let curatedFields: Record<string, any> = {};
+      const extracted = (doc.extracted || {}) as Record<string, unknown>;
+      let curatedFields: Record<string, unknown> = {};
 
       if (doc.type === 'AADHAAR') {
         curatedFields = {
@@ -457,7 +465,7 @@ export class DocumentService {
 
     // Check if Document record already exists for this type
     let doc = await this.db.document.findFirst({
-      where: { employeeId, type: docType as any },
+      where: { employeeId, type: docType as DocumentType },
     });
 
     if (doc) {
@@ -466,7 +474,7 @@ export class DocumentService {
         data: {
           status: 'SUBMITTED',
           storagePath,
-          extracted: extracted as any,
+          extracted: extracted as Prisma.InputJsonValue,
           reviewedBy: null,
           rejectionReason: null,
         },
@@ -476,10 +484,10 @@ export class DocumentService {
         data: {
           id: crypto.randomUUID(),
           employeeId,
-          type: docType as any,
+          type: docType as DocumentType,
           status: 'SUBMITTED',
           storagePath,
-          extracted: extracted as any,
+          extracted: extracted as Prisma.InputJsonValue,
           reviewedBy: null,
           rejectionReason: null,
         },
@@ -491,7 +499,7 @@ export class DocumentService {
       employeeId: doc.employeeId,
       type: doc.type,
       status: doc.status,
-      extracted: doc.extracted as any,
+      extracted: doc.extracted as Record<string, unknown> | null,
       reviewedBy: doc.reviewedBy,
       rejectionReason: doc.rejectionReason,
       storagePath: doc.storagePath,

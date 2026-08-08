@@ -16,6 +16,7 @@ import { PdfGeneratorService } from '../employee/pdf-generator.service';
 import { EmployeeService } from '../employee/employee.service';
 import { AbacOwnershipGuard } from '../common/guards/abac-ownership.guard';
 import type { Response } from 'express';
+import type { AuthenticatedRequest } from '../interfaces/types.interface';
 
 @UseGuards(AbacOwnershipGuard)
 @Controller('employees/:employeeId')
@@ -28,7 +29,7 @@ export class ComplianceController {
 
   @Roles('HR', 'MANAGER', 'NEW_HIRE')
   @Get('compliance-forms')
-  getDocs(@Param('employeeId') employeeId: string) {
+  async getEmployeeForms(@Param('employeeId') employeeId: string) {
     return this.complianceService.getEmployeeForms(employeeId);
   }
 
@@ -44,7 +45,7 @@ export class ComplianceController {
     @Param('employeeId') employeeId: string,
     @Param('formId') formId: string,
     @Body() dto: SignFormDto,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
   ) {
     // For signForm's "own form" check specifically: compare req.user.employeeId against the target Employee.id
     if (req.user.role === 'NEW_HIRE' && req.user.employeeId !== employeeId) {
@@ -64,7 +65,7 @@ export class ComplianceController {
     @Param('employeeId') employeeId: string,
     @Param('formId') formId: string,
     @Res() res: Response,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
   ) {
     if (req.user.role === 'NEW_HIRE' && req.user.employeeId !== employeeId) {
       throw new ForbiddenException('Forbidden resource');
@@ -72,16 +73,15 @@ export class ComplianceController {
     const employee = await this.employeeService.getEmployee(employeeId);
 
     // Prepare candidate info
-    const personal = employee.personal as any;
-    const job = employee.job as any;
+    const { personal, job } = employee;
     const candidateInfo = {
       name: personal.name,
-      dob: personal.dob,
-      phone: personal.phone,
+      dob: personal.dob ?? '',
+      phone: personal.phone ?? '',
       email: personal.email,
-      title: job.title,
-      department: job.department,
-      joiningDate: job.joiningDate,
+      title: job.title ?? '',
+      department: job.department ?? '',
+      joiningDate: job.joiningDate ?? '',
     };
 
     const forms = await this.complianceService.getEmployeeForms(employeeId);

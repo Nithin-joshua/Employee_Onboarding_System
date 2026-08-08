@@ -1,14 +1,21 @@
 import { Injectable } from '@nestjs/common';
-const pdf = require('pdf-parse');
+import pdf from 'pdf-parse';
+
+interface PdfParseResult {
+  text: string;
+}
+
+type PdfParserFn = (dataBuffer: Buffer) => Promise<PdfParseResult>;
 
 @Injectable()
 export class DocumentParserService {
-  async extractPdfMetadata(buffer: Buffer): Promise<Record<string, any>> {
+  async extractPdfMetadata(buffer: Buffer): Promise<Record<string, unknown>> {
     try {
-      const parsed = await pdf(buffer);
+      const pdfParser = pdf as unknown as PdfParserFn;
+      const parsed = await pdfParser(buffer);
       const text = parsed.text || '';
 
-      const metadata: Record<string, any> = {
+      const metadata: Record<string, unknown> = {
         confidence: 1.0,
       };
 
@@ -44,7 +51,7 @@ export class DocumentParserService {
     } catch (error) {
       return {
         confidence: 0.0,
-        error: error.message,
+        error: (error as Error).message,
       };
     }
   }

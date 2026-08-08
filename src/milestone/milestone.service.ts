@@ -9,22 +9,31 @@ import { AuditLogService } from '../db/audit-log.service';
 import { Employee, Milestone } from '../interfaces/types.interface';
 import { mapEmployee } from '../employee/employee.service';
 import * as crypto from 'crypto';
+import {
+  Milestone as PrismaMilestone,
+  MilestoneType,
+  Role,
+} from '@prisma/client';
 
-function mapMilestoneToPrismaType(type: string): any {
+function mapMilestoneToPrismaType(
+  type: 'DAY1' | '30' | '60' | '90',
+): MilestoneType {
   if (type === '30') return 'M30';
   if (type === '60') return 'M60';
   if (type === '90') return 'M90';
-  return type;
+  return 'DAY1';
 }
 
-function mapPrismaTypeToMilestoneType(type: string): any {
+function mapPrismaTypeToMilestoneType(
+  type: MilestoneType,
+): 'DAY1' | '30' | '60' | '90' {
   if (type === 'M30') return '30';
   if (type === 'M60') return '60';
   if (type === 'M90') return '90';
-  return type;
+  return 'DAY1';
 }
 
-export function mapMilestone(m: any): Milestone {
+export function mapMilestone(m: PrismaMilestone): Milestone {
   return {
     id: m.id,
     employeeId: m.employeeId,
@@ -176,7 +185,7 @@ export class MilestoneService {
           fromStatus: employee.status,
           toStatus: targetStatus,
           actorId: role === 'NEW_HIRE' ? employeeId : 'MANAGER_PORTAL',
-          actorRole: role as any,
+          actorRole: role as Role,
           note: `Milestone ${type} completed.`,
         },
         tx,

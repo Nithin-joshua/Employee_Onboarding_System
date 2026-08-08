@@ -1,21 +1,22 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { StorageService } from '../src/document/storage.service';
-import { MockOcrService } from '../src/document/ocr.service';
+import { OcrService } from '../src/document/ocr.service';
+import { Document } from '../src/interfaces/types.interface';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
 describe('Live OCR Integration Test (Manual)', () => {
   let storageService: StorageService;
-  let ocrService: MockOcrService;
+  let ocrService: OcrService;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      providers: [StorageService, MockOcrService],
+      providers: [StorageService, OcrService],
     }).compile();
 
     storageService = moduleFixture.get<StorageService>(StorageService);
-    ocrService = moduleFixture.get<MockOcrService>(MockOcrService);
+    ocrService = moduleFixture.get<OcrService>(OcrService);
   });
 
   it('should run live upload and ocr extraction', async () => {
@@ -45,11 +46,11 @@ describe('Live OCR Integration Test (Manual)', () => {
     expect(storagePath).toBeDefined();
 
     // 2. Perform OCR
-    const doc = {
+    const doc: Document = {
       id: 'doc_test_123',
       employeeId,
-      type: docType as any,
-      status: 'SUBMITTED' as any,
+      type: docType,
+      status: 'SUBMITTED',
       extracted: null,
       reviewedBy: null,
       rejectionReason: null,

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DbService } from './db.service';
-import { EmployeeStatus, Role, AuditLog } from '@prisma/client';
+import { EmployeeStatus, Role, AuditLog, Prisma } from '@prisma/client';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -16,9 +16,9 @@ export class AuditLogService {
       actorRole: Role;
       note?: string;
     },
-    tx?: any,
+    tx?: Prisma.TransactionClient,
   ): Promise<AuditLog> {
-    const runInTx = async (prismaTx: any) => {
+    const runInTx = async (prismaTx: Prisma.TransactionClient) => {
       // Lock the AuditLog table to prevent race conditions from concurrent updates
       await prismaTx.$executeRawUnsafe(
         'LOCK TABLE "AuditLog" IN EXCLUSIVE MODE',

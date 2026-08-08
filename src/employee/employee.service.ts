@@ -6,24 +6,41 @@ import {
 } from '@nestjs/common';
 import { DbService } from '../db/db.service';
 import { AuditLogService } from '../db/audit-log.service';
-import { Employee, EmployeeStatus } from '../interfaces/types.interface';
+import {
+  Employee,
+  EmployeeStatus,
+  assertPersonalDetails,
+  assertJobDetails,
+} from '../interfaces/types.interface';
+import {
+  Employee as PrismaEmployee,
+  Document as PrismaDocument,
+  ComplianceForm as PrismaComplianceForm,
+  Milestone as PrismaMilestone,
+} from '@prisma/client';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { ComplianceRuleService } from './compliance-rule.service';
 import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
-export function mapEmployee(emp: any): Employee {
+export interface PrismaEmployeeWithRelations extends PrismaEmployee {
+  documents?: PrismaDocument[];
+  complianceForms?: PrismaComplianceForm[];
+  milestones?: PrismaMilestone[];
+}
+
+export function mapEmployee(emp: PrismaEmployeeWithRelations): Employee {
   return {
     id: emp.id,
     status: emp.status as EmployeeStatus,
-    personal: emp.personal,
-    job: emp.job,
-    documentIds: emp.documents ? emp.documents.map((d: any) => d.id) : [],
+    personal: assertPersonalDetails(emp.personal ?? {}),
+    job: assertJobDetails(emp.job ?? {}),
+    documentIds: emp.documents ? emp.documents.map((d) => d.id) : [],
     complianceFormIds: emp.complianceForms
-      ? emp.complianceForms.map((c: any) => c.id)
+      ? emp.complianceForms.map((c) => c.id)
       : [],
-    milestoneIds: emp.milestones ? emp.milestones.map((m: any) => m.id) : [],
+    milestoneIds: emp.milestones ? emp.milestones.map((m) => m.id) : [],
     createdAt:
       emp.createdAt instanceof Date
         ? emp.createdAt.toISOString()
@@ -56,7 +73,9 @@ export class EmployeeService {
     }
 
     const { requiredForms } =
-      await this.complianceRuleService.evaluateEligibility(employee.job.salary);
+      await this.complianceRuleService.evaluateEligibility(
+        employee.job.salary ?? 0,
+      );
 
     for (const formType of requiredForms) {
       try {
@@ -70,8 +89,13 @@ export class EmployeeService {
             data: {},
           },
         });
-      } catch (err: any) {
-        if (err.code === 'P2002') {
+      } catch (err: unknown) {
+        if (
+          err &&
+          typeof err === 'object' &&
+          'code' in err &&
+          err.code === 'P2002'
+        ) {
           continue;
         }
         throw err;
@@ -172,6 +196,7 @@ export class EmployeeService {
     employeeId: string,
     role: string,
   ): Promise<Employee> {
+    void role;
     const employee = await this.db.employee.findUnique({
       where: { id: employeeId },
     });

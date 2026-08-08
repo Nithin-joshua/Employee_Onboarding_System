@@ -14,10 +14,15 @@ import { DocumentService } from './document.service';
 import {
   SubmitDocumentsDto,
   RejectDocumentDto,
-  ApproveReviewDto,
 } from '../employee/dto/transitions.dto';
 import { Roles } from '../auth/roles.decorator';
 import { AbacOwnershipGuard } from '../common/guards/abac-ownership.guard';
+import type { AuthenticatedRequest } from '../interfaces/types.interface';
+
+interface UploadedFileInterface {
+  buffer: Buffer;
+  mimetype: string;
+}
 
 @UseGuards(AbacOwnershipGuard)
 @Controller('employees/:employeeId')
@@ -41,7 +46,7 @@ export class DocumentController {
   submit(
     @Param('employeeId') employeeId: string,
     @Body() dto: SubmitDocumentsDto,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
   ) {
     return this.documentService.submitDocuments(
       employeeId,
@@ -61,7 +66,7 @@ export class DocumentController {
   verify(
     @Param('employeeId') employeeId: string,
     @Body() dto: { docId: string },
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
   ) {
     return this.documentService.verifyDocument(
       employeeId,
@@ -75,7 +80,7 @@ export class DocumentController {
   reject(
     @Param('employeeId') employeeId: string,
     @Body() dto: RejectDocumentDto,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
   ) {
     return this.documentService.rejectDocument(
       employeeId,
@@ -87,7 +92,10 @@ export class DocumentController {
 
   @Roles('HR')
   @Post('approve-review')
-  approve(@Param('employeeId') employeeId: string, @Req() req: any) {
+  approve(
+    @Param('employeeId') employeeId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
     return this.documentService.approveReview(employeeId, req.user.role);
   }
 
@@ -97,7 +105,7 @@ export class DocumentController {
   upload(
     @Param('employeeId') employeeId: string,
     @Param('docType') docType: string,
-    @UploadedFile() file: any,
+    @UploadedFile() file: UploadedFileInterface,
   ) {
     return this.documentService.uploadDocumentFile(
       employeeId,

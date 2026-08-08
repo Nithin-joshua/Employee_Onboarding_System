@@ -7,6 +7,10 @@ import {
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from './roles.decorator';
 import { DbService } from '../db/db.service';
+import {
+  AuthenticatedRequest,
+  assertJobDetails,
+} from '../interfaces/types.interface';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -23,7 +27,7 @@ export class RolesGuard implements CanActivate {
     if (!requiredRoles) {
       return true;
     }
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const { user } = request;
     if (!user || !user.role) {
       throw new ForbiddenException('No user role found in request context');
@@ -37,7 +41,10 @@ export class RolesGuard implements CanActivate {
       );
     }
 
-    const employeeId = request.params.employeeId || request.params.id;
+    let employeeId = request.params.employeeId || request.params.id;
+    if (Array.isArray(employeeId)) {
+      employeeId = employeeId[0];
+    }
 
     // ABAC Guard: If user is a NEW_HIRE, check ownership
     if (user.role === 'NEW_HIRE') {
@@ -55,9 +62,9 @@ export class RolesGuard implements CanActivate {
           where: { id: employeeId },
         });
         if (employee) {
-          const job = employee.job as any;
+          const job = assertJobDetails(employee.job);
           const managerId = user.employeeId || user.userId;
-          if (job?.managerId !== managerId) {
+          if (job.managerId !== managerId) {
             throw new ForbiddenException(
               'Only the assigned manager can perform actions on this employee record',
             );

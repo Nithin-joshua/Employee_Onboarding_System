@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { DbService } from '../db/db.service';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class ComplianceRuleService implements OnModuleInit {
@@ -38,9 +39,9 @@ export class ComplianceRuleService implements OnModuleInit {
   async getThreshold(
     ruleKey: string,
     fallback: number,
-    tx?: any,
+    tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx || this.db;
+    const client = tx ? tx : this.db;
     const rule = await client.complianceRule.findUnique({
       where: { ruleKey, isActive: true },
     });
@@ -49,13 +50,12 @@ export class ComplianceRuleService implements OnModuleInit {
 
   async evaluateEligibility(
     grossSalary: number,
-    tx?: any,
+    tx?: Prisma.TransactionClient,
   ): Promise<{
     pfApplicable: boolean;
     esiApplicable: boolean;
     requiredForms: ('PF_FORM11' | 'PF_FORM2' | 'ESI_FORM1')[];
   }> {
-    const pfLimit = await this.getThreshold('PF_ELIGIBILITY_LIMIT', 15000, tx);
     const esiLimit = await this.getThreshold('ESI_GROSS_LIMIT', 21000, tx);
 
     // PF is always applicable as per the original hardcoded rule (pfApplicable = true)

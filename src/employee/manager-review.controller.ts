@@ -22,6 +22,11 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
+import type { AuthenticatedRequest } from '../interfaces/types.interface';
+import {
+  assertJobDetails,
+  assertPersonalDetails,
+} from '../interfaces/types.interface';
 
 @ApiTags('Employee')
 @ApiBearerAuth()
@@ -51,7 +56,10 @@ export class ManagerReviewController {
     description: 'Access forbidden / Not the assigned manager.',
   })
   @Post('approve-hire')
-  async approveHire(@Param('employeeId') employeeId: string, @Req() req: any) {
+  async approveHire(
+    @Param('employeeId') employeeId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
     const employee = await this.db.employee.findUnique({
       where: { id: employeeId },
       include: { documents: true, complianceForms: true, milestones: true },
@@ -61,7 +69,7 @@ export class ManagerReviewController {
       throw new ConflictException('Employee not found');
     }
 
-    const job = employee.job as any;
+    const job = assertJobDetails(employee.job);
     const managerId = req.user.employeeId || req.user.userId;
 
     if (job.managerId !== managerId) {
@@ -98,7 +106,7 @@ export class ManagerReviewController {
         tx,
       );
 
-      const personal = employee.personal as any;
+      const personal = assertPersonalDetails(employee.personal);
       await this.outboxService.createAndEmitEvent(
         tx,
         'employee.status_changed',
@@ -136,7 +144,7 @@ export class ManagerReviewController {
   async rejectHire(
     @Param('employeeId') employeeId: string,
     @Body() dto: RejectHireDto,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
   ) {
     const employee = await this.db.employee.findUnique({
       where: { id: employeeId },
@@ -147,7 +155,7 @@ export class ManagerReviewController {
       throw new ConflictException('Employee not found');
     }
 
-    const job = employee.job as any;
+    const job = assertJobDetails(employee.job);
     const managerId = req.user.employeeId || req.user.userId;
 
     if (job.managerId !== managerId) {
