@@ -14,6 +14,7 @@ export default function ComplianceFormSigning({ params: paramsPromise }) {
   const [error, setError] = useState('');
   const [signingName, setSigningName] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   const fetchEmployee = async () => {
     try {
@@ -37,19 +38,20 @@ export default function ComplianceFormSigning({ params: paramsPromise }) {
 
   const handleSign = async (e) => {
     e.preventDefault();
+    setActionError('');
     if (!signingName.trim()) {
-      alert('Please type your name to sign');
+      setActionError('Please type your name to sign');
       return;
     }
     setActionLoading(true);
     try {
       await request(`/employees/${employee.id}/sign-form/${params.formId}`, {
         method: 'POST',
-        body: JSON.stringify({ signature: signingName }),
+        body: JSON.stringify({ signedBy: signingName }),
       }, session);
       router.push('/onboarding');
     } catch (err) {
-      alert(err.message);
+      setActionError(err.message || 'Failed to sign the form');
     } finally {
       setActionLoading(false);
     }
@@ -78,6 +80,11 @@ export default function ComplianceFormSigning({ params: paramsPromise }) {
       </div>
 
       <form onSubmit={handleSign} className="space-y-4">
+        {actionError && (
+          <div className="p-3 text-sm text-red-700 bg-red-100 border border-red-200 rounded">
+            {actionError}
+          </div>
+        )}
         <div>
           <label className="block text-sm font-semibold mb-1">Type your full name to E-Sign</label>
           <input

@@ -30,9 +30,17 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException(`Role ${user.role} is not authorized for this action`);
     }
 
+    const employeeId = request.params.employeeId || request.params.id;
+
+    // ABAC Guard: If user is a NEW_HIRE, check ownership
+    if (user.role === 'NEW_HIRE') {
+      if (employeeId && user.employeeId !== employeeId) {
+        throw new ForbiddenException('Access denied: You can only access your own record.');
+      }
+    }
+    
     // ABAC Guard: If user is a MANAGER, enforce manager ownership on employee records
     if (user.role === 'MANAGER') {
-      const employeeId = request.params.employeeId || request.params.id;
       if (employeeId) {
         const employee = await this.db.employee.findUnique({
           where: { id: employeeId },

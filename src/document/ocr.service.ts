@@ -74,6 +74,25 @@ export class MockOcrService {
   constructor(private readonly storageService: StorageService) {}
 
   async extract(doc: Document): Promise<{ fields: Record<string, unknown>; confidence: number }> {
+    if (process.env.OCR_MODE === 'mock') {
+      try {
+        const fs = require('fs/promises');
+        const path = require('path');
+        const filePath = path.join(process.cwd(), 'fixtures', 'ocr-mock', `${doc.type.toUpperCase()}.json`);
+        const content = await fs.readFile(filePath, 'utf-8');
+        const data = JSON.parse(content);
+        return {
+          fields: data.fields,
+          confidence: data.confidence ?? 0.95,
+        };
+      } catch (err) {
+        return {
+          fields: { mockKey: 'mockValue' },
+          confidence: 0.95,
+        };
+      }
+    }
+
     if (!doc.storagePath) {
       throw new Error(`Document ${doc.id} does not have a storagePath`);
     }

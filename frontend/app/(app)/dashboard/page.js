@@ -101,13 +101,22 @@ export default function Dashboard() {
           </p>
         </div>
         {role === 'HR' && (
-          <Link
-            href="/employees/new"
-            className="h-11 px-6 bg-brand-black text-white rounded-full font-semibold text-[14px] flex items-center justify-center hover:bg-brand-charcoal transition-all shadow-sm"
-            id="new-employee-btn"
-          >
-            + Add New Hire
-          </Link>
+          <div className="flex gap-3">
+            <Link
+              href="/settings/invitations"
+              className="h-11 px-6 bg-white border border-gray-300 text-brand-black rounded-full font-semibold text-[14px] flex items-center justify-center hover:bg-gray-50 transition-all shadow-sm"
+              id="invitations-btn"
+            >
+              Invitation Codes
+            </Link>
+            <Link
+              href="/employees/new"
+              className="h-11 px-6 bg-brand-black text-white rounded-full font-semibold text-[14px] flex items-center justify-center hover:bg-brand-charcoal transition-all shadow-sm"
+              id="new-employee-btn"
+            >
+              + Add New Hire
+            </Link>
+          </div>
         )}
       </div>
 

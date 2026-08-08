@@ -32,6 +32,21 @@ export class EmailService {
     await this.sendMail(email, 'Hiring Confirmed - Welcome to the Team!', htmlContent);
   }
 
+  async sendOnboardingInvite(email: string, name: string, tempPassword: string): Promise<void> {
+    const htmlContent = `
+      <html>
+        <body>
+          <h2>Welcome aboard, ${name}! 🎉</h2>
+          <p>You have been added to the Employee Onboarding System.</p>
+          <p>Please log in using your email and the following temporary password:</p>
+          <h3 style="font-size: 20px; color: #1a73e8;">${tempPassword}</h3>
+          <p>We recommend updating your password after logging in.</p>
+        </body>
+      </html>
+    `;
+    await this.sendMail(email, 'Your Onboarding Account Credentials', htmlContent);
+  }
+
   private async sendMail(to: string, subject: string, htmlContent: string) {
     if (!this.apiKey || this.apiKey === 'mock_brevo_api_key_for_testing') {
       this.logger.log(`[MOCK EMAIL] To: ${to} | Subject: ${subject}`);

@@ -1,9 +1,11 @@
-import { Controller, Post, Body, Param, Get, UseInterceptors, UploadedFile, Req } from '@nestjs/common';
+import { Controller, Post, Body, Param, Get, UseInterceptors, UploadedFile, Req, UseGuards } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentService } from './document.service';
 import { SubmitDocumentsDto, RejectDocumentDto, ApproveReviewDto } from '../employee/dto/transitions.dto';
 import { Roles } from '../auth/roles.decorator';
+import { AbacOwnershipGuard } from '../common/guards/abac-ownership.guard';
 
+@UseGuards(AbacOwnershipGuard)
 @Controller('employees/:employeeId')
 export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}

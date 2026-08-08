@@ -106,4 +106,16 @@ export class AuditLogService {
 
     return { isTampered: false };
   }
+
+  async verifyChainIntegrityWithCount() {
+    const result = await this.verifyChainIntegrity();
+    const count = await this.db.auditLog.count();
+    return {
+      isValid: !result.isTampered,
+      success: !result.isTampered,
+      totalLogsVerified: count,
+      brokenIndex: result.brokenIndex,
+      isTampered: result.isTampered,
+    };
+  }
 }

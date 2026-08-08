@@ -7,6 +7,7 @@ export default function Register() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [otpSuccessMessage, setOtpSuccessMessage] = useState('');
   const [step, setStep] = useState(1); // 1 = Registration Form, 2 = OTP Verification
   const [regSection, setRegSection] = useState('A'); // 'A' = Personal Details, 'B' = Credentials
   const [email, setEmail] = useState('');
@@ -134,6 +135,7 @@ export default function Register() {
   const handleResendOtp = async () => {
     setLoading(true);
     setError('');
+    setOtpSuccessMessage('');
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000';
       const res = await fetch(`${baseUrl}/auth/resend-otp`, {
@@ -146,7 +148,7 @@ export default function Register() {
         const errData = await res.json();
         throw new Error(errData.message || 'Resend failed');
       }
-      alert('A new OTP has been sent to your email.');
+      setOtpSuccessMessage('A new OTP has been sent to your email.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -272,6 +274,12 @@ export default function Register() {
             {error && (
               <div className="mb-6 p-4 bg-brand-pink-soft text-brand-black rounded-[8px] text-[14px]">
                 {error}
+              </div>
+            )}
+
+            {otpSuccessMessage && (
+              <div className="mb-6 p-4 bg-green-50 text-green-800 border border-green-200 rounded-[8px] text-[14px]">
+                {otpSuccessMessage}
               </div>
             )}
 

@@ -4,6 +4,9 @@ import { AuditLogService } from '../db/audit-log.service';
 import { Employee, EmployeeStatus } from '../interfaces/types.interface';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { ComplianceRuleService } from './compliance-rule.service';
+import { EmailService } from '../email/email.service';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 export function mapEmployee(emp: any): Employee {
   return {
@@ -25,6 +28,7 @@ export class EmployeeService {
     private readonly db: DbService,
     private readonly complianceRuleService: ComplianceRuleService,
     private readonly auditLogService: AuditLogService,
+    private readonly emailService: EmailService,
   ) {}
 
   async generateComplianceForms(employeeId: string): Promise<void> {
@@ -46,7 +50,7 @@ export class EmployeeService {
       try {
         await this.db.complianceForm.create({
           data: {
-            id: Math.random().toString(36).substring(7),
+            id: crypto.randomUUID(),
             employeeId,
             type: formType,
             status: 'PENDING_GENERATION',
@@ -90,9 +94,10 @@ export class EmployeeService {
   }
 
   async createEmployee(dto: CreateEmployeeDto): Promise<Employee> {
+    const employeeId = crypto.randomUUID();
     const newEmployee = await this.db.employee.create({
       data: {
-        id: Math.random().toString(36).substring(7),
+        id: employeeId,
         status: 'INVITED',
         personal: {
           name: dto.name,
@@ -114,6 +119,22 @@ export class EmployeeService {
         milestones: true,
       },
     });
+
+    // Option B: Create User account with NEW_HIRE role and a securely generated temp password
+    const tempPassword = crypto.randomBytes(6).toString('hex') + 'A1!';
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+    await this.db.user.create({
+      data: {
+        email: dto.email,
+        passwordHash,
+        role: 'NEW_HIRE',
+        employeeId: newEmployee.id,
+      },
+    });
+
+    // Email credentials
+    await this.emailService.sendOnboardingInvite(dto.email, dto.name, tempPassword);
 
     await this.auditLogService.createLog({
       employeeId: newEmployee.id,

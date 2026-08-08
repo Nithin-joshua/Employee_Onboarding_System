@@ -3,6 +3,7 @@ import { DbService } from '../db/db.service';
 import { AuditLogService } from '../db/audit-log.service';
 import { Employee, Milestone } from '../interfaces/types.interface';
 import { mapEmployee } from '../employee/employee.service';
+import * as crypto from 'crypto';
 
 function mapMilestoneToPrismaType(type: string): any {
   if (type === '30') return 'M30';
@@ -72,7 +73,7 @@ export class MilestoneService {
     for (const type of types) {
       await this.db.milestone.create({
         data: {
-          id: Math.random().toString(36).substring(7),
+          id: crypto.randomUUID(),
           employeeId,
           type: mapMilestoneToPrismaType(type),
           status: 'PENDING',

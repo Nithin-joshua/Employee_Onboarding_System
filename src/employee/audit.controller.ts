@@ -9,15 +9,11 @@ import { AuditLogService } from '../db/audit-log.service';
 export class AuditController {
   constructor(private readonly auditLogService: AuditLogService) {}
 
-  @Roles('HR', 'MANAGER')
+  @Roles('HR', 'MANAGER', 'SYSTEM')
   @ApiOperation({ summary: 'Verify the cryptographic integrity of the audit logs chain' })
   @ApiResponse({ status: 200, description: 'Return audit verification status.' })
   @Get('verify-integrity')
   async verifyIntegrity() {
-    const result = await this.auditLogService.verifyChainIntegrity();
-    return {
-      success: !result.isTampered,
-      ...result,
-    };
+    return this.auditLogService.verifyChainIntegrityWithCount();
   }
 }

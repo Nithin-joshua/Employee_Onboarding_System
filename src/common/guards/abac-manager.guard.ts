@@ -12,8 +12,15 @@ export class AbacManagerGuard implements CanActivate {
       throw new ForbiddenException('No user session found');
     }
 
+    const employeeId = request.params.id || request.params.employeeId;
+
+    if (user.role === 'NEW_HIRE') {
+      if (employeeId && user.employeeId !== employeeId) {
+        throw new ForbiddenException('Access denied: You can only access your own record.');
+      }
+    }
+
     if (user.role === 'MANAGER') {
-      const employeeId = request.params.id || request.params.employeeId;
       if (employeeId) {
         const employee = await this.db.employee.findUnique({
           where: { id: employeeId },

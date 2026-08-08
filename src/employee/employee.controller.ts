@@ -37,19 +37,6 @@ export class EmployeeController {
     return this.employeeService.createEmployee(dto);
   }
 
-  @Roles('HR', 'SYSTEM')
-  @ApiOperation({ summary: 'Verify the cryptographic integrity of the audit logs chain' })
-  @ApiResponse({ status: 200, description: 'Return audit verification status.' })
-  @Get('audit/verify-integrity')
-  async verifyIntegrity() {
-    const result = await this.auditLogService.verifyChainIntegrity();
-    const count = await this.auditLogService['db'].auditLog.count();
-    return {
-      isValid: !result.isTampered,
-      totalLogsVerified: count,
-      brokenIndex: result.brokenIndex,
-    };
-  }
 
   @Roles('HR', 'MANAGER', 'NEW_HIRE')
   @UseGuards(AbacOwnershipGuard)
@@ -72,36 +59,6 @@ export class EmployeeController {
     return this.employeeService.openPreboardingLink(id, req.user.role);
   }
 
-  @Roles('HR', 'MANAGER', 'NEW_HIRE')
-  @UseGuards(AbacOwnershipGuard)
-  @ApiOperation({ summary: 'Stream candidate compliance form as a vector PDF' })
-  @ApiParam({ name: 'id', description: 'Employee ID' })
-  @ApiParam({ name: 'formType', description: 'Compliance form type (e.g. PF_FORM11, ESI_FORM1)' })
-  @Get('employee/:id/compliance-pdf/:formType')
-  async downloadPdf(
-    @Param('id') employeeId: string,
-    @Param('formType') formType: string,
-    @Res() res: Response,
-  ) {
-    const employee = await this.employeeService.getEmployee(employeeId);
-    const personal = employee.personal as any;
-    const job = employee.job as any;
-
-    const candidateInfo = {
-      name: personal.name,
-      dob: personal.dob,
-      phone: personal.phone,
-      email: personal.email,
-      title: job.title,
-      department: job.department,
-      joiningDate: job.joiningDate,
-    };
-
-    const pdfBuffer = await this.pdfGeneratorService.generateFormPDF(formType, candidateInfo);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=${formType}_${employeeId}.pdf`);
-    res.end(pdfBuffer);
-  }
 
   @Roles('HR', 'MANAGER')
   @ApiOperation({ summary: 'Stream live employee status changes in real time via SSE' })

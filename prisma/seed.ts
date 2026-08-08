@@ -12,6 +12,7 @@ async function main() {
   await prisma.complianceForm.deleteMany({});
   await prisma.milestone.deleteMany({});
   await prisma.employee.deleteMany({});
+  await prisma.invitationCode.deleteMany({});
 
   const employeesFilePath = path.join(__dirname, '../fixtures/employees.json');
   const employeesContent = await fs.readFile(employeesFilePath, 'utf-8');
@@ -37,6 +38,19 @@ async function main() {
       email: 'manager@example.com',
       passwordHash: hashedDevPassword,
       role: 'MANAGER',
+      employeeId: 'mgr_123',
+    },
+  });
+
+  // Seed InvitationCode
+  const seededInvitation = await prisma.invitationCode.create({
+    data: {
+      code: 'WELCOME2026',
+      jobTitle: 'Software Engineer',
+      department: 'Engineering',
+      managerId: 'mgr_123',
+      salary: 60000,
+      joiningDate: new Date('2026-10-01'),
     },
   });
 

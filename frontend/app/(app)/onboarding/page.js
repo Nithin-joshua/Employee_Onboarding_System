@@ -11,6 +11,7 @@ export default function Onboarding() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   const fetchOnboardingStatus = async () => {
     if (!session?.user?.employeeId) {
@@ -36,13 +37,14 @@ export default function Onboarding() {
 
   const handleRunExtraction = async () => {
     setActionLoading(true);
+    setActionError('');
     try {
       const updated = await request(`/employees/${employee.id}/run-extraction`, {
         method: 'POST',
       }, session);
       setEmployee(updated);
     } catch (err) {
-      alert(err.message);
+      setActionError(err.message || 'Data extraction failed');
     } finally {
       setActionLoading(false);
     }
@@ -86,6 +88,12 @@ export default function Onboarding() {
           Sign Out
         </button>
       </div>
+
+      {actionError && (
+        <div className="p-3 text-sm text-red-700 bg-red-100 border border-red-200 rounded">
+          {actionError}
+        </div>
+      )}
 
       {/* Onboarding Stage Description */}
       <div className="p-4 border rounded bg-white space-y-3">

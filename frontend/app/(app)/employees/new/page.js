@@ -23,6 +23,10 @@ export default function NewEmployee() {
     joiningDate: '',
   });
 
+  const [success, setSuccess] = useState(false);
+  const [invitedName, setInvitedName] = useState('');
+  const [invitedEmail, setInvitedEmail] = useState('');
+
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
@@ -34,7 +38,6 @@ export default function NewEmployee() {
 
     try {
       const payload = {
-        id: form.id,
         personal: {
           name: form.name,
           dob: form.dob,
@@ -55,15 +58,37 @@ export default function NewEmployee() {
         body: JSON.stringify(payload),
       }, session);
 
-      // Auto-register user as NEW_HIRE inside Nest side if needed, or rely on auto setup.
-      // Usually, user creation goes hand in hand. Let's redirect to dashboard.
-      router.push('/dashboard');
+      setInvitedName(form.name);
+      setInvitedEmail(form.email);
+      setSuccess(true);
     } catch (err) {
       setError(err.message || 'Failed to create employee');
     } finally {
       setLoading(false);
     }
   };
+
+  if (success) {
+    return (
+      <div className="max-w-md mx-auto p-6 bg-white border border-green-200 rounded shadow-sm text-center">
+        <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Invitation Sent!</h2>
+        <p className="text-gray-600 mb-6">
+          <strong>{invitedName}</strong> has been successfully registered. A User account is active, and a temporary password has been emailed to <strong>{invitedEmail}</strong>.
+        </p>
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="w-full bg-black text-white p-2 rounded-full font-bold hover:bg-gray-800"
+        >
+          Go to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-white border rounded shadow-sm">
@@ -80,30 +105,16 @@ export default function NewEmployee() {
       {error && <p className="text-red-500 mb-4 text-sm">{error}</p>}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold mb-1">Employee ID</label>
-            <input
-              type="text"
-              name="id"
-              value={form.id}
-              onChange={handleChange}
-              placeholder="e.g. EMP123"
-              className="w-full p-2 border rounded"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold mb-1">Full Name</label>
-            <input
-              type="text"
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              className="w-full p-2 border rounded"
-              required
-            />
-          </div>
+        <div>
+          <label className="block text-sm font-semibold mb-1">Full Name</label>
+          <input
+            type="text"
+            name="name"
+            value={form.name}
+            onChange={handleChange}
+            className="w-full p-2 border rounded"
+            required
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-4">

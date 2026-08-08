@@ -15,6 +15,8 @@ export default function DocumentUploads() {
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState({});
 
+  const [actionError, setActionError] = useState('');
+
   const fetchEmployee = async () => {
     try {
       setLoading(true);
@@ -38,6 +40,7 @@ export default function DocumentUploads() {
     if (!file) return;
 
     setUploading((prev) => ({ ...prev, [type]: true }));
+    setActionError('');
     try {
       // Build standard multipart request
       const formData = new FormData();
@@ -60,7 +63,7 @@ export default function DocumentUploads() {
 
       await fetchEmployee();
     } catch (err) {
-      alert(err.message);
+      setActionError(err.message || 'Upload failed');
     } finally {
       setUploading((prev) => ({ ...prev, [type]: false }));
     }
@@ -68,6 +71,7 @@ export default function DocumentUploads() {
 
   const handleSubmitAll = async () => {
     setLoading(true);
+    setActionError('');
     try {
       await request(`/employees/${employee.id}/submit-documents`, {
         method: 'POST',
@@ -77,7 +81,7 @@ export default function DocumentUploads() {
       }, session);
       router.push('/onboarding');
     } catch (err) {
-      alert(err.message);
+      setActionError(err.message || 'Submission failed');
       setLoading(false);
     }
   };
@@ -100,6 +104,12 @@ export default function DocumentUploads() {
           Back
         </button>
       </div>
+
+      {actionError && (
+        <div className="p-3 text-sm text-red-700 bg-red-100 border border-red-200 rounded">
+          {actionError}
+        </div>
+      )}
 
       <div className="space-y-4">
         {REQUIRED_DOC_TYPES.map((type) => {

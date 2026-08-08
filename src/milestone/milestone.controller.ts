@@ -1,8 +1,10 @@
-import { Controller, Post, Body, Param, Get, Req } from '@nestjs/common';
+import { Controller, Post, Body, Param, Get, Req, UseGuards } from '@nestjs/common';
 import { MilestoneService } from './milestone.service';
 import { CompleteMilestoneDto } from '../employee/dto/transitions.dto';
 import { Roles } from '../auth/roles.decorator';
+import { AbacOwnershipGuard } from '../common/guards/abac-ownership.guard';
 
+@UseGuards(AbacOwnershipGuard)
 @Controller('employees/:employeeId')
 export class MilestoneController {
   constructor(private readonly milestoneService: MilestoneService) {}

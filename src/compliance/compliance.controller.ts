@@ -1,11 +1,13 @@
-import { Controller, Post, Body, Param, Get, Req, ForbiddenException, Res } from '@nestjs/common';
+import { Controller, Post, Body, Param, Get, Req, ForbiddenException, Res, UseGuards } from '@nestjs/common';
 import { ComplianceService } from './compliance.service';
 import { SignFormDto } from '../employee/dto/transitions.dto';
 import { Roles } from '../auth/roles.decorator';
 import { PdfGeneratorService } from '../employee/pdf-generator.service';
 import { EmployeeService } from '../employee/employee.service';
+import { AbacOwnershipGuard } from '../common/guards/abac-ownership.guard';
 import type { Response } from 'express';
 
+@UseGuards(AbacOwnershipGuard)
 @Controller('employees/:employeeId')
 export class ComplianceController {
   constructor(

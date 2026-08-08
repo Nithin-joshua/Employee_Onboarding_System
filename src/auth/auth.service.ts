@@ -4,6 +4,7 @@ import { DbService } from '../db/db.service';
 import { AuditLogService } from '../db/audit-log.service';
 import * as bcrypt from 'bcrypt';
 import { EmailService } from '../email/email.service';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -36,7 +37,7 @@ export class AuthService {
     }
 
     const hash = await bcrypt.hash(dto.pass, 10);
-    const employeeId = Math.random().toString(36).substring(7);
+    const employeeId = crypto.randomUUID();
 
     // Create User (unverified status managed implicitly via verified boolean in OtpCode or employee status REGISTERED)
     const user = await this.db.user.create({

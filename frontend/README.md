@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# OnboardPro Next.js Client Application
+
+This Next.js application serves as the client frontend for the Employee Onboarding System.
 
 ## Getting Started
 
-First, run the development server:
-
+### 1. Configure Environment Variables
+Copy `.env.local.example` to `.env.local` inside this directory:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.local.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Modify the variables:
+* `NEXT_PUBLIC_API_URL`: Points to the NestJS API server (default: `http://127.0.0.1:3000`).
+* `NEXTAUTH_URL`: Points to this client host (default: `http://localhost:3002`).
+* `NEXTAUTH_SECRET`: Secret hash token (must match the backend's `NEXTAUTH_SECRET`).
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 2. Run Locally
 
-## Learn More
+Install client dependencies:
+```bash
+npm install
+```
 
-To learn more about Next.js, take a look at the following resources:
+Start the Next.js client development server:
+```bash
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Open [http://localhost:3002](http://localhost:3002) in your browser to access the onboarding portal.
+* Sign in as HR: `hr@example.com` / `password123`
+* Sign in as Manager: `manager@example.com` / `password123`
+* Sign in as Candidate: `alice@example.com` / `password123`

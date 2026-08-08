@@ -6,10 +6,10 @@ import { MockOcrService } from './ocr.service';
 import { StorageService } from './storage.service';
 import { ComplianceService } from '../compliance/compliance.service';
 import { mapEmployee } from '../employee/employee.service';
-import { LocalVaultService } from '../common/services/local-vault.service';
 import { DocumentParserService } from '../employee/document-parser.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as crypto from 'crypto';
 
 const REQUIRED_DOC_TYPES = ['AADHAAR', 'PAN', 'EDUCATION', 'RELIEVING_LETTER', 'BANK_PROOF', 'PHOTO'];
 
@@ -20,7 +20,6 @@ export class DocumentService {
     private readonly ocrService: MockOcrService,
     private readonly storageService: StorageService,
     private readonly complianceService: ComplianceService,
-    private readonly localVaultService: LocalVaultService,
     private readonly documentParserService: DocumentParserService,
     private readonly auditLogService: AuditLogService,
   ) {}
@@ -76,7 +75,7 @@ export class DocumentService {
     for (const docType of REQUIRED_DOC_TYPES) {
       await this.db.document.create({
         data: {
-          id: Math.random().toString(36).substring(7),
+          id: crypto.randomUUID(),
           employeeId: employeeId,
           type: docType as any,
           status: 'SUBMITTED',
@@ -132,18 +131,7 @@ export class DocumentService {
       
       if (storagePath.startsWith('uploads/')) {
         try {
-          const absolutePath = path.join(process.cwd(), storagePath);
-          const packed = await fs.readFile(absolutePath);
-          const { encryptedData, iv, authTag } = this.localVaultService.unpack(packed);
-          const decryptedStream = this.localVaultService.decryptBuffer(encryptedData, iv, authTag);
-          
-          // Read Stream into Buffer
-          const chunks: any[] = [];
-          for await (const chunk of decryptedStream) {
-            chunks.push(chunk);
-          }
-          const decryptedBuffer = Buffer.concat(chunks);
-          
+          const decryptedBuffer = await this.storageService.downloadDocument(storagePath);
           const fields = await this.documentParserService.extractPdfMetadata(decryptedBuffer);
           result = {
             fields,
@@ -382,18 +370,7 @@ export class DocumentService {
   ): Promise<Document> {
     const employee = await this.getEmployeeOrThrow(employeeId);
 
-    // Save to local vault
-    const { encryptedData, iv, authTag } = this.localVaultService.encryptBuffer(buffer);
-    const packed = this.localVaultService.pack(encryptedData, iv, authTag);
-
-    const ext = 'enc';
-    const dir = path.join(process.cwd(), 'uploads', employeeId);
-    const filePath = path.join(dir, `${docType.toUpperCase()}.${ext}`);
-
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(filePath, packed);
-
-    const storagePath = `uploads/${employeeId}/${docType.toUpperCase()}.${ext}`;
+    const storagePath = await this.storageService.uploadDocument(employeeId, docType, buffer, mimeType);
 
     // Auto-extract metadata
     const extracted = await this.documentParserService.extractPdfMetadata(buffer);
@@ -417,7 +394,7 @@ export class DocumentService {
     } else {
       doc = await this.db.document.create({
         data: {
-          id: Math.random().toString(36).substring(7),
+          id: crypto.randomUUID(),
           employeeId,
           type: docType as any,
           status: 'SUBMITTED',

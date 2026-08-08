@@ -9,6 +9,7 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e) => {
@@ -154,6 +155,13 @@ export default function SignIn() {
             </div>
           )}
 
+          {forgotMessage && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 text-blue-800 rounded-[8px] text-[13px] flex justify-between items-center">
+              <span>To reset your password, please contact your HR administrator.</span>
+              <button type="button" onClick={() => setForgotMessage(false)} className="font-bold hover:opacity-85 text-xs ml-2 uppercase">Close</button>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label className="block text-[14px] font-medium text-brand-black" htmlFor="signin-email">
@@ -175,9 +183,13 @@ export default function SignIn() {
                 <label className="block text-[14px] font-medium text-brand-black" htmlFor="signin-password">
                   Password
                 </label>
-                <a href="#" className="text-[12px] text-brand-lime-olive font-semibold hover:underline">
+                <button
+                  type="button"
+                  onClick={() => setForgotMessage(true)}
+                  className="text-[12px] text-brand-lime-olive font-semibold hover:underline"
+                >
                   Forgot?
-                </a>
+                </button>
               </div>
               <input
                 type="password"

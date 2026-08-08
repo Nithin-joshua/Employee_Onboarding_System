@@ -14,6 +14,7 @@ export default function EmployeeDetail({ params: paramsPromise }) {
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectionReason, setRejectionReason] = useState({});
+  const [actionMessage, setActionMessage] = useState(null);
 
   const fetchEmployee = async () => {
     try {
@@ -35,14 +36,15 @@ export default function EmployeeDetail({ params: paramsPromise }) {
 
   const handleApproveReview = async () => {
     setActionLoading(true);
+    setActionMessage(null);
     try {
       const updated = await request(`/employees/${params.id}/approve-review`, {
         method: 'POST',
       }, session);
-      alert('Approved to Manager Review phase');
+      setActionMessage({ text: 'Approved to Manager Review phase', type: 'success' });
       fetchEmployee();
     } catch (err) {
-      alert(err.message);
+      setActionMessage({ text: err.message || 'Failed to approve review', type: 'error' });
     } finally {
       setActionLoading(false);
     }
@@ -50,14 +52,16 @@ export default function EmployeeDetail({ params: paramsPromise }) {
 
   const handleVerifyDoc = async (docId) => {
     setActionLoading(true);
+    setActionMessage(null);
     try {
       await request(`/employees/${params.id}/verify-document`, {
         method: 'POST',
         body: JSON.stringify({ docId }),
       }, session);
+      setActionMessage({ text: 'Document verified successfully', type: 'success' });
       fetchEmployee();
     } catch (err) {
-      alert(err.message);
+      setActionMessage({ text: err.message || 'Failed to verify document', type: 'error' });
     } finally {
       setActionLoading(false);
     }
@@ -65,8 +69,9 @@ export default function EmployeeDetail({ params: paramsPromise }) {
 
   const handleRejectDoc = async (docId) => {
     const reason = rejectionReason[docId];
+    setActionMessage(null);
     if (!reason) {
-      alert('Please enter a rejection reason first.');
+      setActionMessage({ text: 'Please enter a rejection reason first.', type: 'error' });
       return;
     }
     setActionLoading(true);
@@ -75,9 +80,10 @@ export default function EmployeeDetail({ params: paramsPromise }) {
         method: 'POST',
         body: JSON.stringify({ docId, reason }),
       }, session);
+      setActionMessage({ text: 'Document rejected successfully', type: 'success' });
       fetchEmployee();
     } catch (err) {
-      alert(err.message);
+      setActionMessage({ text: err.message || 'Failed to reject document', type: 'error' });
     } finally {
       setActionLoading(false);
     }
@@ -85,13 +91,15 @@ export default function EmployeeDetail({ params: paramsPromise }) {
 
   const handleCompleteMilestone = async (milestoneId) => {
     setActionLoading(true);
+    setActionMessage(null);
     try {
       await request(`/employees/${params.id}/complete-milestone`, {
         method: 'POST',
       }, session);
+      setActionMessage({ text: 'Milestone completed successfully', type: 'success' });
       fetchEmployee();
     } catch (err) {
-      alert(err.message);
+      setActionMessage({ text: err.message || 'Failed to complete milestone', type: 'error' });
     } finally {
       setActionLoading(false);
     }
@@ -101,20 +109,22 @@ export default function EmployeeDetail({ params: paramsPromise }) {
 
   const handleApproveHire = async () => {
     setActionLoading(true);
+    setActionMessage(null);
     try {
       await request(`/employees/${params.id}/approve-hire`, { method: 'POST' }, session);
-      alert('Hiring successfully approved! Email confirmation sent.');
+      setActionMessage({ text: 'Hiring successfully approved! Email confirmation sent.', type: 'success' });
       fetchEmployee();
     } catch (err) {
-      alert(err.message);
+      setActionMessage({ text: err.message || 'Failed to approve hire', type: 'error' });
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleRejectHire = async () => {
+    setActionMessage(null);
     if (!managerRejectReason.trim()) {
-      alert('Please specify a rejection reason');
+      setActionMessage({ text: 'Please specify a rejection reason', type: 'error' });
       return;
     }
     setActionLoading(true);
@@ -123,10 +133,10 @@ export default function EmployeeDetail({ params: paramsPromise }) {
         method: 'POST',
         body: JSON.stringify({ reason: managerRejectReason }),
       }, session);
-      alert('Hiring rejected back to HR review stage');
+      setActionMessage({ text: 'Hiring rejected back to HR review stage', type: 'success' });
       fetchEmployee();
     } catch (err) {
-      alert(err.message);
+      setActionMessage({ text: err.message || 'Failed to reject hire', type: 'error' });
     } finally {
       setActionLoading(false);
     }
@@ -153,6 +163,15 @@ export default function EmployeeDetail({ params: paramsPromise }) {
           Back
         </button>
       </div>
+
+      {actionMessage && (
+        <div className={`p-4 rounded border text-sm flex justify-between items-center ${
+          actionMessage.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <span>{actionMessage.text}</span>
+          <button onClick={() => setActionMessage(null)} className="font-bold hover:opacity-85 text-xs ml-3 uppercase">Dismiss</button>
+        </div>
+      )}
 
       {/* Manager Approval Panel */}
       {employee.status === 'MANAGER_REVIEW' && isManager && (

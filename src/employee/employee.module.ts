@@ -10,11 +10,13 @@ import { OutboxService } from './outbox.service';
 import { EmployeeStatusListener } from './employee-status.listener';
 import { PdfGeneratorService } from './pdf-generator.service';
 import { DbModule } from '../db/db.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
     forwardRef(() => ComplianceModule),
     DbModule,
+    EmailModule,
   ],
   controllers: [
     EmployeeController,
