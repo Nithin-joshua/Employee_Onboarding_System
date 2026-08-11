@@ -76,18 +76,103 @@ export class ComplianceService {
 
   // Called on entry to COMPLIANCE_PROCESSING
   async generateForms(employeeId: string): Promise<void> {
-    await this.employeeService.generateComplianceForms(employeeId);
+    await this.generateAndAutoFillForms(employeeId);
+  }
+
+  async generateAndAutoFillForms(employeeId: string): Promise<void> {
+    const employee = await this.getEmployeeOrThrow(employeeId);
+    
+    const extractField = (docs: any[], docType: string, fieldKey: string): string | null => {
+      const doc = docs.find((d) => d.type === docType);
+      if (!doc || !doc.extracted) return null;
+      try {
+        const ext = typeof doc.extracted === 'string' ? JSON.parse(doc.extracted) : doc.extracted;
+        const fields = ext.fields || ext;
+        return fields[fieldKey] || null;
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const { requiredForms } =
+      await this.complianceRuleService.evaluateEligibility(
+        employee.job.salary ?? 0,
+      );
+
+    const aadhaarName = extractField(employee.documents || [], 'AADHAAR', 'name') || employee.personal.name;
+    const aadhaarDob = extractField(employee.documents || [], 'AADHAAR', 'dob') || employee.personal.dob || '';
+    const fatherName = extractField(employee.documents || [], 'PAN', 'fatherName') || '';
+    const address = extractField(employee.documents || [], 'AADHAAR', 'address') || '';
+
+    for (const formType of requiredForms) {
+      let formData: Record<string, any> = {};
+      if (formType === 'PF_FORM11') {
+        formData = {
+          employeeName: aadhaarName,
+          dob: aadhaarDob,
+          joiningDate: employee.job.joiningDate || '',
+          uan: '',
+          prevPfMemberId: '',
+          prevEmployerName: '',
+          prevEpfMember: 'No',
+          prevEpsMember: 'No',
+          schemeCertificateDetails: '',
+          internationalWorker: 'No',
+          kycStatus: 'Verified via Aadhaar/PAN',
+          declarationText: 'I hereby declare that all the previous membership and EPF details provided above are true and complete.',
+        };
+      } else if (formType === 'PF_FORM2') {
+        formData = {
+          employeeName: aadhaarName,
+          maritalStatus: 'Unmarried',
+          nomineeName: fatherName || 'Father',
+          relationship: fatherName ? 'Father' : '',
+          nomineeDob: '',
+          nomineeAddress: address || '',
+          percentageShare: '100%',
+          guardianDetails: '',
+          eNominationStatus: 'Pending Signature',
+        };
+      }
+
+      try {
+        await this.db.complianceForm.create({
+          data: {
+            id: crypto.randomUUID(),
+            employeeId,
+            type: formType as any,
+            status: 'PENDING_GENERATION',
+            deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            data: formData,
+          },
+        });
+      } catch (err: unknown) {
+        // Skip duplicate key errors
+      }
+    }
   }
 
   // COMPLIANCE_PROCESSING -> PENDING_SIGNATURE
   async computeCompliance(employeeId: string): Promise<Employee> {
     const employee = await this.getEmployeeOrThrow(employeeId);
 
-    if (employee.status !== 'COMPLIANCE_PROCESSING') {
+    if (employee.status !== 'COMPLIANCE_PROCESSING' && employee.status !== 'MANAGER_REVIEW') {
       throw new ConflictException(
         `Cannot compute compliance. Employee status is ${employee.status}`,
       );
     }
+
+    const extractField = (docs: any[], docType: string, fieldKey: string): string | null => {
+      const doc = docs.find((d) => d.type === docType);
+      if (!doc || !doc.extracted) return null;
+      try {
+        const ext = typeof doc.extracted === 'string' ? JSON.parse(doc.extracted) : doc.extracted;
+        const fields = ext.fields || ext;
+        return fields[fieldKey] || null;
+      } catch (e) {
+        return null;
+      }
+    };
 
     const updated = await this.db.$transaction(async (tx) => {
       // Generate forms if not already generated
@@ -102,7 +187,42 @@ export class ComplianceService {
             tx,
           );
 
+        const aadhaarName = extractField(employee.documents || [], 'AADHAAR', 'name') || employee.personal.name;
+        const aadhaarDob = extractField(employee.documents || [], 'AADHAAR', 'dob') || employee.personal.dob || '';
+        const fatherName = extractField(employee.documents || [], 'PAN', 'fatherName') || '';
+        const address = extractField(employee.documents || [], 'AADHAAR', 'address') || '';
+
         for (const formType of requiredForms) {
+          let formData: Record<string, any> = {};
+          if (formType === 'PF_FORM11') {
+            formData = {
+              employeeName: aadhaarName,
+              dob: aadhaarDob,
+              joiningDate: employee.job.joiningDate || '',
+              uan: '',
+              prevPfMemberId: '',
+              prevEmployerName: '',
+              prevEpfMember: 'No',
+              prevEpsMember: 'No',
+              schemeCertificateDetails: '',
+              internationalWorker: 'No',
+              kycStatus: 'Verified via Aadhaar/PAN',
+              declarationText: 'I hereby declare that all the previous membership and EPF details provided above are true and complete.',
+            };
+          } else if (formType === 'PF_FORM2') {
+            formData = {
+              employeeName: aadhaarName,
+              maritalStatus: 'Unmarried',
+              nomineeName: fatherName || 'Father',
+              relationship: fatherName ? 'Father' : '',
+              nomineeDob: '',
+              nomineeAddress: address || '',
+              percentageShare: '100%',
+              guardianDetails: '',
+              eNominationStatus: 'Pending Signature',
+            };
+          }
+
           try {
             await tx.complianceForm.create({
               data: {
@@ -111,7 +231,7 @@ export class ComplianceService {
                 type: formType,
                 status: 'PENDING_GENERATION',
                 deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                data: {},
+                data: formData,
               },
             });
           } catch (err: unknown) {
@@ -173,12 +293,8 @@ export class ComplianceService {
   ): Promise<Employee> {
     const employee = await this.getEmployeeOrThrow(employeeId);
 
-    // Role check: NEW_HIRE (own form) or HR (countersign)
-    if (role === 'NEW_HIRE') {
-      if (signedBy !== employeeId) {
-        throw new ForbiddenException(`New hire can only sign their own form`);
-      }
-    } else if (role !== 'HR') {
+    // Role check: Allowed roles
+    if (role !== 'HR' && role !== 'NEW_HIRE') {
       throw new ForbiddenException(
         `Role ${role} is not authorized to sign forms`,
       );
@@ -263,14 +379,47 @@ export class ComplianceService {
                 : type === '90'
                   ? 'M90'
                   : type;
+          let checklist: string[] = [];
+          let dueDays = 30;
+          if (prismaType === 'DAY1') {
+            checklist = [
+              'Receive laptop & IT hardware details',
+              'Verify corporate email setup',
+              'Attend orientation session',
+              'Collect security access badge',
+            ];
+            dueDays = 1;
+          } else if (prismaType === 'M30') {
+            checklist = [
+              'Complete mandatory security & compliance training',
+              'Review first month deliverables with manager',
+              'Submit bank account & salary credit details',
+            ];
+            dueDays = 30;
+          } else if (prismaType === 'M60') {
+            checklist = [
+              'Mid-probation progress check-in',
+              'Provide onboarding feedback survey',
+              'Complete initial project integration',
+            ];
+            dueDays = 60;
+          } else if (prismaType === 'M90') {
+            checklist = [
+              'Final probation review meeting',
+              'Sign off on performance objectives',
+              'Official confirmation of employment status',
+            ];
+            dueDays = 90;
+          }
+
           await tx.milestone.create({
             data: {
               id: crypto.randomUUID(),
               employeeId,
               type: prismaType,
               status: 'PENDING',
-              dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-              checklist: [],
+              dueDate: new Date(Date.now() + dueDays * 24 * 60 * 60 * 1000),
+              checklist,
             },
           });
         }
@@ -278,6 +427,30 @@ export class ComplianceService {
     });
 
     return this.getEmployeeOrThrow(employeeId);
+  }
+
+  async updateFormData(
+    employeeId: string,
+    formId: string,
+    data: Record<string, any>,
+  ): Promise<ComplianceForm> {
+    const form = await this.db.complianceForm.findFirst({
+      where: { id: formId, employeeId },
+    });
+    if (!form) {
+      throw new NotFoundException(`Compliance form ${formId} not found`);
+    }
+
+    const updated = await this.db.complianceForm.update({
+      where: { id: formId },
+      data: {
+        data: {
+          ...(form.data as Record<string, any>),
+          ...data,
+        },
+      },
+    });
+    return mapComplianceForm(updated);
   }
 
   async getEmployeeForms(employeeId: string): Promise<ComplianceForm[]> {

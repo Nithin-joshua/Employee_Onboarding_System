@@ -16,6 +16,9 @@ export class DocumentUploadItem {
       'AADHAAR',
       'PAN',
       'EDUCATION',
+      'EDUCATION_10TH',
+      'EDUCATION_2ND_PUC',
+      'EDUCATION_DEGREE',
       'RELIEVING_LETTER',
       'BANK_PROOF',
       'PHOTO',
@@ -28,6 +31,9 @@ export class DocumentUploadItem {
     'AADHAAR',
     'PAN',
     'EDUCATION',
+    'EDUCATION_10TH',
+    'EDUCATION_2ND_PUC',
+    'EDUCATION_DEGREE',
     'RELIEVING_LETTER',
     'BANK_PROOF',
     'PHOTO',
@@ -36,6 +42,9 @@ export class DocumentUploadItem {
     | 'AADHAAR'
     | 'PAN'
     | 'EDUCATION'
+    | 'EDUCATION_10TH'
+    | 'EDUCATION_2ND_PUC'
+    | 'EDUCATION_DEGREE'
     | 'RELIEVING_LETTER'
     | 'BANK_PROOF'
     | 'PHOTO';
@@ -81,11 +90,11 @@ export class SignFormDto {
 
 export class CompleteMilestoneDto {
   @ApiProperty({
-    enum: ['DAY1', '30', '60', '90'],
+    enum: ['DAY1', 'M30', 'M60', 'M90'],
     description: 'Type of onboarding milestone',
   })
   @IsString()
   @IsNotEmpty()
-  @IsIn(['DAY1', '30', '60', '90'])
-  type: 'DAY1' | '30' | '60' | '90';
+  @IsIn(['DAY1', 'M30', 'M60', 'M90'])
+  type: 'DAY1' | 'M30' | 'M60' | 'M90';
 }

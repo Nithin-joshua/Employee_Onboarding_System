@@ -46,9 +46,12 @@ export class EmployeeStatusListener {
     });
 
     try {
-      if (toStatus === 'COMPLIANCE_PROCESSING') {
-        // Auto-generate compliance forms
-        await this.complianceService.generateForms(employeeId);
+      if (toStatus === 'DOCUMENTS_SUBMITTED') {
+        // Generate pre-filled compliance forms from candidate documents OCR data
+        await this.complianceService.generateAndAutoFillForms(employeeId);
+      } else if (toStatus === 'COMPLIANCE_PROCESSING') {
+        // Auto-generate and activate compliance forms for signature
+        await this.complianceService.computeCompliance(employeeId);
 
         // Send hire-confirmation email
         if (email && name) {

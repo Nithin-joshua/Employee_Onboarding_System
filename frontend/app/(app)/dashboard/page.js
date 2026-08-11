@@ -79,8 +79,7 @@ const Card = ({ children, className = '', delay = 0 }) => (
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ type: 'spring', stiffness: 300, damping: 28, delay }}
-    className={`bg-[var(--card-bg)] rounded-[12px] border border-[var(--border-color)] ${className}`}
-    style={{ boxShadow: 'var(--shadow-sm)' }}
+    className={`bg-white/90 backdrop-blur-sm rounded-[16px] border border-emerald-100/60 shadow-[0_8px_30px_rgba(16,185,129,0.02)] transition-all duration-300 ${className}`}
   >
     {children}
   </motion.div>
@@ -90,8 +89,8 @@ const Card = ({ children, className = '', delay = 0 }) => (
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[8px] px-3 py-2 text-[12px]" style={{ boxShadow: 'var(--shadow-md)' }}>
-      <p className="font-semibold text-[var(--foreground)] mb-1">{label}</p>
+    <div className="bg-white border border-emerald-100 rounded-xl px-3 py-2 text-[12px] shadow-lg shadow-emerald-500/5">
+      <p className="font-semibold text-neutral-800 mb-1">{label}</p>
       {payload.map(p => (
         <p key={p.name} style={{ color: p.color }}>{p.name}: <span className="font-bold">{p.value}</span></p>
       ))}
@@ -101,19 +100,23 @@ const ChartTooltip = ({ active, payload, label }) => {
 
 /* ── Stat card ── */
 const StatCard = ({ icon: Icon, label, value, delta, deltaUp, delay }) => (
-  <Card delay={delay} className="p-5 card-lift">
+  <Card delay={delay} className="p-5 hover:scale-[1.01] hover:border-emerald-200/80 hover:shadow-lg hover:shadow-emerald-500/5">
     <div className="flex items-center justify-between mb-4">
-      <div className="w-8 h-8 rounded-[6px] bg-[var(--border-color)]/60 flex items-center justify-center text-[var(--text-muted)]">
-        <Icon className="w-4 h-4" strokeWidth={1.5} />
+      <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100/50 flex items-center justify-center shadow-sm">
+        <Icon className="w-[18px] h-[18px]" strokeWidth={1.75} />
       </div>
       {delta && (
-        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${deltaUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+          deltaUp 
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+            : 'bg-amber-50 text-amber-700 border-amber-100'
+        }`}>
           {deltaUp ? '▲' : '▼'} {delta}
         </span>
       )}
     </div>
-    <p className="text-[12px] font-medium text-[var(--text-muted)] uppercase tracking-wide">{label}</p>
-    <p className="text-[36px] font-semibold tracking-tight text-[var(--foreground)] mt-0.5 animate-countUp" style={{ fontFamily: 'var(--font-display)' }}>
+    <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">{label}</p>
+    <p className="text-[36px] font-extrabold tracking-tight text-neutral-900 mt-0.5 animate-countUp" style={{ fontFamily: 'var(--font-display)' }}>
       {value}
     </p>
   </Card>
@@ -135,15 +138,23 @@ const getStatusBadge = (status) => {
   return map[status] || 'bg-[var(--border-color)] text-[var(--text-muted)] border-[var(--border-color)]';
 };
 
-/* ── CONFIDENCE ── */
 const getConfidence = (emp) => {
   if (!emp.documents?.length) return { label: 'N/A', cls: 'text-[var(--text-faint)]' };
-  const scores = emp.documents.map(d => d.ocrConfidence).filter(c => c != null);
-  if (!scores.length) return { label: 'N/A', cls: 'text-[var(--text-faint)]' };
+  const parsedDocs = emp.documents.filter(d => d.status === 'EXTRACTED' || d.status === 'VERIFIED');
+  if (!parsedDocs.length) return { label: 'N/A', cls: 'text-[var(--text-faint)]' };
+  
+  const scores = parsedDocs
+    .map(d => {
+      const ext = d.extracted || {};
+      if (ext.confidence !== undefined) return ext.confidence;
+      if (ext.fields?.confidence !== undefined) return ext.fields.confidence;
+      return 0.90; // Fallback for legacy parsed files
+    });
+  
   const min = Math.min(...scores);
-  if (min >= 0.85) return { label: 'High', cls: 'text-emerald-600' };
-  if (min >= 0.60) return { label: 'Med',  cls: 'text-amber-500' };
-  return { label: 'Low', cls: 'text-red-500' };
+  if (min >= 0.85) return { label: 'High', cls: 'text-emerald-600 font-bold' };
+  if (min >= 0.60) return { label: 'Med',  cls: 'text-amber-500 font-bold' };
+  return { label: 'Low', cls: 'text-red-500 font-bold' };
 };
 
 /* ════════════════════════════════════════════
@@ -163,7 +174,17 @@ export default function Dashboard() {
         const data = await request('/employees', { method: 'GET' }, session);
         if (session.user.role === 'MANAGER') {
           const mid = session.user.employeeId || session.user.id;
-          setEmployees(data.filter(e => e.job?.managerId === mid));
+          setEmployees(data.filter(e => {
+            if (!e.job?.managerId) return false;
+            const targetMid = String(e.job.managerId).toLowerCase().trim();
+            const cleanMid = String(mid).toLowerCase().trim();
+            
+            // Normalize mgr_ prefix
+            const normalizedTarget = targetMid.replace(/^mgr_/, '').replace(/^mgr/, '');
+            const normalizedMid = cleanMid.replace(/^mgr_/, '').replace(/^mgr/, '');
+            
+            return targetMid === cleanMid || normalizedTarget === normalizedMid;
+          }));
         } else {
           setEmployees(data);
         }
@@ -187,6 +208,26 @@ export default function Dashboard() {
   const pendingCount  = employees.filter(e => e.status === 'UNDER_REVIEW').length;
   const activeCount   = employees.filter(e => e.status === 'ACTIVE' || e.status === 'DAY1_READY').length;
   const totalCount    = employees.length;
+
+  // Calculate actual OCR Success Rate dynamically
+  const ocrStats = useMemo(() => {
+    const ocrDocs = employees.flatMap(e => e.documents || []).filter(d => d.status === 'EXTRACTED' || d.status === 'VERIFIED');
+    const total = ocrDocs.length;
+    if (total === 0) return { rate: '100%', delta: '0 docs parsed', up: true };
+    
+    const successful = ocrDocs.filter(d => {
+      const ext = d.extracted || {};
+      const conf = ext.confidence !== undefined ? ext.confidence : ext.fields?.confidence;
+      return d.status === 'VERIFIED' || (conf != null && conf >= 0.70);
+    }).length;
+    
+    const percentage = Math.round((successful / total) * 100);
+    return {
+      rate: `${percentage}%`,
+      delta: `${successful} of ${total} docs verified`,
+      up: percentage >= 80
+    };
+  }, [employees]);
 
   if (loading) {
     return (
@@ -219,8 +260,8 @@ export default function Dashboard() {
         className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
         <div>
-          <h1 className="text-[26px] font-semibold tracking-tight text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
-            {role === 'HR' ? `Hi, ${name}` : `Manager View`}
+          <h1 className="text-[26px] font-bold tracking-tight text-neutral-800" style={{ fontFamily: 'var(--font-display)' }}>
+            {role === 'HR' ? 'HR Dashboard' : 'Manager Dashboard'}
           </h1>
           <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
             {role === 'HR' ? 'Verification queue and pipeline overview.' : 'Review and approve direct reports.'}
@@ -245,7 +286,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard icon={FileCheck} label="Pending Review"      value={pendingCount} delta="action needed" deltaUp={false} delay={0.04} />
         <StatCard icon={Users}     label="Total Candidates"    value={totalCount}   delta={`${activeCount} active`} deltaUp={true}  delay={0.08} />
-        <StatCard icon={CheckCircle2} label="OCR Success Rate" value="94.2%"        delta="1.4%"         deltaUp={true}  delay={0.12} />
+        <StatCard icon={CheckCircle2} label="OCR Success Rate" value={ocrStats.rate}        delta={ocrStats.delta} deltaUp={ocrStats.up}  delay={0.12} />
       </div>
 
       {/* ── Charts row ── */}
@@ -359,12 +400,12 @@ export default function Dashboard() {
       </Card>
 
       {/* ── Verification Queue Table ── */}
-      <Card delay={0.28} className="overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-color)]">
-          <h2 className="text-[14px] font-semibold text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
+      <Card delay={0.28} className="overflow-hidden border border-emerald-100/60">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-emerald-100/60 bg-emerald-50/20">
+          <h2 className="text-[14px] font-bold text-neutral-800" style={{ fontFamily: 'var(--font-display)' }}>
             Verification Queue
           </h2>
-          <span className="text-[11px] font-medium text-[var(--text-muted)] bg-[var(--background)] px-2.5 py-1 rounded-full border border-[var(--border-color)]">
+          <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
             {employees.length} total
           </span>
         </div>
@@ -374,7 +415,7 @@ export default function Dashboard() {
           ) : (
             <table className="w-full text-left">
               <thead>
-                <tr className="border-b border-[var(--border-color)] text-[11px] font-semibold text-[var(--text-faint)] uppercase tracking-wider">
+                <tr className="border-b border-emerald-100/60 text-[11px] font-bold text-emerald-800 bg-emerald-500/5 uppercase tracking-wider">
                   <th className="py-3 px-5">Candidate</th>
                   <th className="py-3 px-5 hidden sm:table-cell">Role</th>
                   <th className="py-3 px-5">Status</th>
@@ -382,7 +423,7 @@ export default function Dashboard() {
                   <th className="py-3 px-5 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--border-color)]">
+              <tbody className="divide-y divide-emerald-100/40">
                 {employees.map((emp, idx) => {
                   const conf = getConfidence(emp);
                   const initial = emp.personal?.name?.charAt(0).toUpperCase() || '?';

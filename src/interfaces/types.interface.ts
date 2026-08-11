@@ -5,6 +5,7 @@ export type EmployeeStatus =
   | 'DOCUMENTS_PENDING'
   | 'DOCUMENTS_SUBMITTED'
   | 'UNDER_REVIEW'
+  | 'MANAGER_REVIEW'
   | 'COMPLIANCE_PROCESSING'
   | 'PENDING_SIGNATURE'
   | 'DAY1_READY'
@@ -106,6 +107,9 @@ export interface Employee {
   documentIds: string[];
   complianceFormIds: string[];
   milestoneIds: string[];
+  documents?: any[];
+  complianceForms?: any[];
+  milestones?: any[];
   createdAt: string;
   updatedAt: string;
 }
@@ -117,6 +121,9 @@ export interface Document {
     | 'AADHAAR'
     | 'PAN'
     | 'EDUCATION'
+    | 'EDUCATION_10TH'
+    | 'EDUCATION_2ND_PUC'
+    | 'EDUCATION_DEGREE'
     | 'RELIEVING_LETTER'
     | 'BANK_PROOF'
     | 'PHOTO';
@@ -140,7 +147,7 @@ export interface ComplianceForm {
 export interface Milestone {
   id: string;
   employeeId: string;
-  type: 'DAY1' | '30' | '60' | '90';
+  type: 'DAY1' | 'M30' | 'M60' | 'M90';
   status: 'PENDING' | 'DONE';
   dueDate: string;
   checklist: string[];

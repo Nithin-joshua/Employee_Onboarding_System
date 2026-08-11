@@ -3,7 +3,7 @@ export async function getApiToken(session) {
 }
 
 export async function request(path, options = {}, session = null) {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
   const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
 
   const headers = {

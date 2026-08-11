@@ -1,6 +1,7 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Get, Body } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Public } from './public.decorator';
+import { Roles } from './roles.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -35,5 +36,17 @@ export class AuthController {
   @Post('resend-otp')
   async resendOtp(@Body() body: ResendOtpDto) {
     return this.authService.resendOtp(body.email);
+  }
+
+  @Roles('HR')
+  @Post('create-system-user')
+  async createSystemUser(@Body() body: { email: string; pass: string; role: 'HR' | 'MANAGER'; employeeId?: string }) {
+    return this.authService.createSystemUser(body);
+  }
+
+  @Roles('HR')
+  @Get('system-users')
+  async listSystemUsers() {
+    return this.authService.listSystemUsers();
   }
 }

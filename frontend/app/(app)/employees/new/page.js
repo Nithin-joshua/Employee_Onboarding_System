@@ -40,19 +40,15 @@ export default function NewEmployee() {
 
     try {
       const payload = {
-        personal: {
-          name: form.name,
-          dob: form.dob,
-          phone: form.phone,
-          email: form.email,
-        },
-        job: {
-          title: form.title,
-          department: form.department,
-          managerId: form.managerId,
-          salary: parseFloat(form.salary),
-          joiningDate: form.joiningDate,
-        },
+        name: form.name,
+        dob: form.dob,
+        phone: form.phone,
+        email: form.email,
+        title: form.title,
+        department: form.department,
+        managerId: form.managerId,
+        salary: parseFloat(form.salary),
+        joiningDate: form.joiningDate,
       };
 
       await request('/employees', {
@@ -132,7 +128,6 @@ export default function NewEmployee() {
             name="name"
             value={form.name}
             onChange={handleChange}
-            placeholder="John Doe"
             className={inputClass}
             required
           />
@@ -146,7 +141,6 @@ export default function NewEmployee() {
               name="email"
               value={form.email}
               onChange={handleChange}
-              placeholder="name@company.com"
               className={inputClass}
               required
             />
@@ -158,7 +152,6 @@ export default function NewEmployee() {
               name="phone"
               value={form.phone}
               onChange={handleChange}
-              placeholder="+1 (555) 000-0000"
               className={inputClass}
               required
             />
@@ -200,7 +193,6 @@ export default function NewEmployee() {
               name="title"
               value={form.title}
               onChange={handleChange}
-              placeholder="Software Engineer"
               className={inputClass}
               required
             />
@@ -212,7 +204,6 @@ export default function NewEmployee() {
               name="department"
               value={form.department}
               onChange={handleChange}
-              placeholder="Engineering"
               className={inputClass}
               required
             />
@@ -227,7 +218,6 @@ export default function NewEmployee() {
               name="managerId"
               value={form.managerId}
               onChange={handleChange}
-              placeholder="Manager User ID"
               className={inputClass}
               required
             />
@@ -239,7 +229,6 @@ export default function NewEmployee() {
               name="salary"
               value={form.salary}
               onChange={handleChange}
-              placeholder="120000"
               className={inputClass}
               required
             />

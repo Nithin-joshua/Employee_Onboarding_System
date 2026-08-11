@@ -9,7 +9,7 @@ import * as path from 'path';
  *
  * Storage mode is controlled by STORAGE_PROVIDER env var:
  *   - 'local'    (default): stores encrypted files under uploads/
- *   - 'supabase': stores files in Supabase Storage bucket 'employee-documents'
+ *   - 'supabase': stores files in Supabase Storage bucket 'employee_documents'
  *
  * Both providers are production-grade. There is no mock/fake mode.
  * If required configuration is missing, this service throws a configuration error.
@@ -65,7 +65,7 @@ export class StorageService {
     const pathWithinBucket = `${employeeId}/${docType.toUpperCase()}.${ext}`;
 
     const { error } = await this.supabase!.storage.from(
-      'employee-documents',
+      'employee_documents',
     ).upload(pathWithinBucket, buffer, {
       contentType: mimeType,
       upsert: true,
@@ -90,7 +90,7 @@ export class StorageService {
     }
 
     const { data, error } = await this.supabase!.storage.from(
-      'employee-documents',
+      'employee_documents',
     ).createSignedUrl(storagePath, 600);
 
     if (error) {
@@ -128,7 +128,7 @@ export class StorageService {
     }
 
     const { data, error } =
-      await this.supabase!.storage.from('employee-documents').download(
+      await this.supabase!.storage.from('employee_documents').download(
         storagePath,
       );
 

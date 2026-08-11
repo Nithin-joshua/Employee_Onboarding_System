@@ -117,6 +117,52 @@ export default function Onboarding() {
         </div>
       )}
 
+      {/* EPFO Onboarding Status Dashboard */}
+      {employee?.complianceForms?.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 border border-emerald-100 rounded-2xl p-4.5 shadow-sm">
+          <div className="p-3 bg-white border border-emerald-50 rounded-xl space-y-1">
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">PF Onboarding</p>
+            <p className={`text-[13px] font-extrabold ${
+              employee.complianceForms?.every(f => f.status === 'SIGNED') ? 'text-emerald-600' : 'text-amber-600'
+            }`}>
+              {employee.complianceForms?.every(f => f.status === 'SIGNED') ? 'Complete' : 'Pending'}
+            </p>
+          </div>
+          <div className="p-3 bg-white border border-emerald-50 rounded-xl space-y-1">
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">UAN Status</p>
+            <p className={`text-[13px] font-extrabold truncate ${
+              (employee.complianceForms?.find(f => f.type === 'PF_FORM11')?.data?.uan) ? 'text-emerald-600' : 'text-neutral-500'
+            }`}>
+              {employee.complianceForms?.find(f => f.type === 'PF_FORM11')?.data?.uan ? `Verified (${employee.complianceForms.find(f => f.type === 'PF_FORM11').data.uan})` : 'Pending'}
+            </p>
+          </div>
+          <div className="p-3 bg-white border border-emerald-50 rounded-xl space-y-1">
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Form 11</p>
+            <p className={`text-[13px] font-extrabold ${
+              employee.complianceForms?.find(f => f.type === 'PF_FORM11')?.status === 'SIGNED' ? 'text-emerald-600' : 'text-amber-600'
+            }`}>
+              {employee.complianceForms?.find(f => f.type === 'PF_FORM11')?.status === 'SIGNED' ? 'Submitted' : 'Draft / Pending'}
+            </p>
+          </div>
+          <div className="p-3 bg-white border border-emerald-50 rounded-xl space-y-1">
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">e-Nomination</p>
+            <p className={`text-[13px] font-extrabold ${
+              employee.complianceForms?.find(f => f.type === 'PF_FORM2')?.status === 'SIGNED' ? 'text-emerald-600' : 'text-amber-600'
+            }`}>
+              {employee.complianceForms?.find(f => f.type === 'PF_FORM2')?.status === 'SIGNED' ? 'Completed' : 'Pending'}
+            </p>
+          </div>
+          <div className="p-3 bg-white border border-emerald-50 rounded-xl space-y-1">
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">KYC Verification</p>
+            <p className="text-[13px] font-extrabold text-emerald-600">Verified</p>
+          </div>
+          <div className="p-3 bg-white border border-emerald-50 rounded-xl space-y-1">
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">HR Verification</p>
+            <p className="text-[13px] font-extrabold text-emerald-600">Approved</p>
+          </div>
+        </div>
+      )}
+
       {/* Onboarding Stage Description */}
       <div className="bg-[var(--card-bg)] rounded-[12px] border border-[var(--border-color)] p-6 space-y-4" style={{ boxShadow: 'var(--shadow-sm)' }}>
         <h2 className="text-[16px] font-semibold tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>Onboarding Status</h2>
@@ -176,7 +222,11 @@ export default function Onboarding() {
             <div className="space-y-2 w-full text-xs text-left mt-1">
               {employee?.complianceForms?.map(cf => (
                 <div key={cf.id} className="flex justify-between items-center bg-[var(--background)] p-3 border border-[var(--border-color)] rounded-[8px]">
-                  <span className="font-semibold text-[13px] text-[var(--foreground)]">{cf.type}</span>
+                  <span className="font-semibold text-[13px] text-[var(--foreground)]">
+                    {cf.type === 'PF_FORM11' ? 'Form 11 (EPF Declaration)' : 
+                     cf.type === 'PF_FORM2' ? 'Form 2 / e-Nomination (EPF/EPS Nomination)' : 
+                     cf.type}
+                  </span>
                   {cf.status === 'PENDING_SIGNATURE' ? (
                     <Link 
                       href={`/onboarding/sign/${cf.id}`} 

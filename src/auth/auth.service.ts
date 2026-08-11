@@ -35,7 +35,7 @@ export class AuthService {
     }
 
     const hash = await bcrypt.hash(dto.pass, 10);
-    const employeeId = crypto.randomUUID();
+    const employeeId = `OP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
@@ -220,5 +220,61 @@ export class AuthService {
     return {
       access_token: this.jwtService.sign(payload),
     };
+  }
+
+  async createSystemUser(dto: { email: string; pass: string; role: 'HR' | 'MANAGER'; employeeId?: string }) {
+    const existingUser = await this.db.user.findUnique({
+      where: { email: dto.email },
+    });
+    if (existingUser) {
+      throw new ConflictException('Email already registered');
+    }
+
+    const hash = await bcrypt.hash(dto.pass, 10);
+    const user = await this.db.user.create({
+      data: {
+        email: dto.email,
+        passwordHash: hash,
+        role: dto.role,
+        employeeId: dto.employeeId || null,
+      },
+    });
+
+    await this.auditLogService.createLog({
+      employeeId: dto.employeeId || 'SYSTEM_USER',
+      fromStatus: 'ACTIVE',
+      toStatus: 'ACTIVE',
+      actorId: 'ADMIN_PORTAL',
+      actorRole: 'HR',
+      note: `System user ${dto.role} created: ${dto.email}`,
+    });
+
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      employeeId: user.employeeId,
+      createdAt: user.createdAt,
+    };
+  }
+
+  async listSystemUsers() {
+    return this.db.user.findMany({
+      where: {
+        role: {
+          in: ['HR', 'MANAGER'],
+        },
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        employeeId: true,
+        createdAt: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
   }
 }

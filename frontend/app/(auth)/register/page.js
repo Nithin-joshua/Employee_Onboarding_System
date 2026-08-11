@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 
 const spring = { type: 'spring', stiffness: 300, damping: 28 };
 
@@ -13,6 +13,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [otpSuccessMessage, setOtpSuccessMessage] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState(1);
   const [regSection, setRegSection] = useState('A');
   const [email, setEmail] = useState('');
@@ -73,7 +74,7 @@ export default function Register() {
     setLoading(true);
     setError('');
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000';
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const res = await fetch(`${baseUrl}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -97,7 +98,7 @@ export default function Register() {
     setLoading(true);
     setError('');
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000';
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const res = await fetch(`${baseUrl}/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,7 +121,7 @@ export default function Register() {
     setError('');
     setOtpSuccessMessage('');
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000';
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const res = await fetch(`${baseUrl}/auth/resend-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -251,12 +252,29 @@ export default function Register() {
               <motion.form key="credentials" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={spring}
                 onSubmit={handleRegister} className="space-y-4">
                 <div>
-                  <label className={labelClass}>Invitation code</label>
-                  <input type="text" name="invitationCode" value={form.invitationCode} onChange={handleChange} placeholder="e.g. INV-XXXX" required className={inputClass} />
+                  <label className={labelClass}>Invitation code (Use WELCOME2026)</label>
+                  <input type="text" name="invitationCode" value={form.invitationCode} onChange={handleChange} placeholder="WELCOME2026" required className={inputClass} />
                 </div>
                 <div>
                   <label className={labelClass}>Password</label>
-                  <input type="password" name="pass" value={form.pass} onChange={handleChange} placeholder="Min. 8 characters" required className={inputClass} />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      name="pass"
+                      value={form.pass}
+                      onChange={handleChange}
+                      placeholder="Min. 8 characters"
+                      required
+                      className="w-full h-10 pl-3 pr-10 rounded-[8px] border border-[var(--border-color)] bg-[var(--background)] text-[var(--foreground)] text-[14px] placeholder:text-[var(--text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--text-faint)] hover:text-[var(--foreground)] transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                   {form.pass && (
                     <div className="mt-2 space-y-1">
                       <div className="flex gap-1 h-1">
@@ -304,10 +322,16 @@ export default function Register() {
                     />
                   ))}
                 </div>
-                <button type="submit" disabled={loading || otp.length < 6}
-                  className="w-full h-10 rounded-[8px] bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-[14px] font-semibold transition-all disabled:opacity-60 flex items-center justify-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
-                  {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Verifying…</> : 'Verify email'}
-                </button>
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={() => { setStep(1); setRegSection('B'); setError(''); setOtpSuccessMessage(''); }}
+                    className="h-10 px-4 rounded-[8px] border border-[var(--border-color)] text-[var(--foreground)] text-[14px] font-medium hover:bg-[var(--background)] transition-all flex items-center gap-1.5">
+                    <ArrowLeft className="w-3.5 h-3.5" /> Back
+                  </button>
+                  <button type="submit" disabled={loading || otp.length < 6}
+                    className="flex-1 h-10 rounded-[8px] bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-[14px] font-semibold transition-all disabled:opacity-60 flex items-center justify-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Verifying…</> : 'Verify email'}
+                  </button>
+                </div>
                 <p className="text-center text-[13px] text-[var(--text-muted)]">
                   Didn&apos;t receive it?{' '}
                   <button type="button" onClick={handleResendOtp} disabled={loading} className="text-[var(--foreground)] font-medium underline underline-offset-4 hover:text-[var(--color-accent)] transition-colors disabled:opacity-50">

@@ -59,6 +59,16 @@ export class ComplianceController {
     );
   }
 
+  @Roles('HR', 'MANAGER')
+  @Post('compliance-forms/:formId/update')
+  async updateFormData(
+    @Param('employeeId') employeeId: string,
+    @Param('formId') formId: string,
+    @Body() body: Record<string, any>,
+  ) {
+    return this.complianceService.updateFormData(employeeId, formId, body);
+  }
+
   @Roles('NEW_HIRE', 'HR', 'MANAGER')
   @Get('download-pdf/:formId')
   async downloadPdf(
@@ -87,10 +97,12 @@ export class ComplianceController {
     const forms = await this.complianceService.getEmployeeForms(employeeId);
     const form = forms.find((f) => f.id === formId);
     const formType = form ? form.type : 'STATUTORY_FORM';
+    const signature = form ? (form.data as Record<string, any>)?.signedBy : undefined;
 
     const pdfBuffer = await this.pdfGeneratorService.generateFormPDF(
       formType,
       candidateInfo,
+      signature,
     );
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(

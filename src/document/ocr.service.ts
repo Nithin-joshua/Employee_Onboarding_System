@@ -26,7 +26,7 @@ import { PhotoSchema } from './ocr-schemas/photo.schema';
  */
 
 interface MistralOcrResponse {
-  documentAnnotation: string | Record<string, unknown>;
+  document_annotation: string | Record<string, unknown>;
   overallConfidence?: number;
   pages?: Array<{
     confidence?: number;
@@ -100,7 +100,8 @@ function averageBlockConfidence(response: MistralOcrResponse): number {
 @Injectable()
 export class OcrService {
   constructor(private readonly storageService: StorageService) {
-    if (!process.env.MISTRAL_API_KEY && process.env.NODE_ENV !== 'test') {
+    const mode = process.env.OCR_MODE || 'mistral';
+    if (mode !== 'local' && !process.env.MISTRAL_API_KEY && process.env.NODE_ENV !== 'test') {
       throw new Error(
         'Configuration Error: MISTRAL_API_KEY environment variable is missing. ' +
           'Please set it to enable Mistral OCR API integration.',
@@ -109,7 +110,30 @@ export class OcrService {
   }
 
   async extract(doc: Document): Promise<OcrResult> {
+    const mode = process.env.OCR_MODE || 'mistral';
+    if (mode === 'local') {
+      return this.extractLocally(doc);
+    }
     return this.extractViaMistralApi(doc);
+  }
+
+  private async extractLocally(doc: Document): Promise<OcrResult> {
+    try {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      const filePath = path.join(process.cwd(), 'prisma', 'seed-data', 'ocr', `${doc.type.toUpperCase()}.json`);
+      const content = await fs.readFile(filePath, 'utf-8');
+      const data = JSON.parse(content);
+      return {
+        fields: data.fields || { documentType: doc.type, seeded: true },
+        confidence: data.confidence ?? 0.9,
+      };
+    } catch {
+      return {
+        fields: { documentType: doc.type, seeded: true },
+        confidence: 0.9,
+      };
+    }
   }
 
   /**
@@ -129,6 +153,7 @@ export class OcrService {
     }
 
     const signedUrl = await this.storageService.getSignedUrl(doc.storagePath);
+    console.log(`[OCR Request] Target Doc ID: ${doc.id}, Type: ${doc.type}, URL: ${signedUrl}`);
 
     const response = await fetch('https://api.mistral.ai/v1/ocr', {
       method: 'POST',
@@ -138,22 +163,28 @@ export class OcrService {
       },
       body: JSON.stringify({
         model: 'mistral-ocr-latest',
-        document: { type: 'document_url', documentUrl: signedUrl },
-        documentAnnotationFormat: buildSchemaFor(doc.type),
+        document: { type: 'document_url', document_url: signedUrl },
+        document_annotation_format: buildSchemaFor(doc.type),
       }),
     });
 
+    console.log(`[OCR Response Status] ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
       const errText = await response.text();
+      console.error(`[OCR Error Output] ${errText}`);
       throw new Error(`Mistral OCR API error: ${response.status} ${errText}`);
     }
 
     const result = (await response.json()) as MistralOcrResponse;
+    console.log(`[OCR Raw JSON Output]`, JSON.stringify(result, null, 2));
 
     const fields: Record<string, unknown> =
-      typeof result.documentAnnotation === 'string'
-        ? (JSON.parse(result.documentAnnotation) as Record<string, unknown>)
-        : (result.documentAnnotation ?? {});
+      typeof result.document_annotation === 'string'
+        ? (JSON.parse(result.document_annotation) as Record<string, unknown>)
+        : (result.document_annotation ?? {});
+
+    console.log(`[OCR Parsed Fields]`, JSON.stringify(fields, null, 2));
 
     const confidence =
       result.overallConfidence ?? averageBlockConfidence(result);

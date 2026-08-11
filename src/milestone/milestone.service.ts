@@ -16,21 +16,15 @@ import {
 } from '@prisma/client';
 
 function mapMilestoneToPrismaType(
-  type: 'DAY1' | '30' | '60' | '90',
+  type: 'DAY1' | 'M30' | 'M60' | 'M90',
 ): MilestoneType {
-  if (type === '30') return 'M30';
-  if (type === '60') return 'M60';
-  if (type === '90') return 'M90';
-  return 'DAY1';
+  return type as MilestoneType;
 }
 
 function mapPrismaTypeToMilestoneType(
   type: MilestoneType,
-): 'DAY1' | '30' | '60' | '90' {
-  if (type === 'M30') return '30';
-  if (type === 'M60') return '60';
-  if (type === 'M90') return '90';
-  return 'DAY1';
+): 'DAY1' | 'M30' | 'M60' | 'M90' {
+  return type as any;
 }
 
 export function mapMilestone(m: PrismaMilestone): Milestone {
@@ -85,7 +79,7 @@ export class MilestoneService {
       where: { employeeId },
     });
 
-    const types: ('DAY1' | '30' | '60' | '90')[] = ['DAY1', '30', '60', '90'];
+    const types: ('DAY1' | 'M30' | 'M60' | 'M90')[] = ['DAY1', 'M30', 'M60', 'M90'];
     for (const type of types) {
       await this.db.milestone.create({
         data: {
@@ -103,7 +97,7 @@ export class MilestoneService {
   // DAY1_READY -> ACTIVE -> MILESTONE_30 -> MILESTONE_60 -> MILESTONE_90 -> ONBOARDING_COMPLETE
   async completeMilestone(
     employeeId: string,
-    type: 'DAY1' | '30' | '60' | '90',
+    type: 'DAY1' | 'M30' | 'M60' | 'M90',
     role: string,
   ): Promise<Employee> {
     const employee = await this.getEmployeeOrThrow(employeeId);
@@ -135,21 +129,21 @@ export class MilestoneService {
         );
       }
       targetStatus = 'ACTIVE';
-    } else if (type === '30') {
+    } else if (type === 'M30') {
       if (employee.status !== 'ACTIVE') {
         throw new ConflictException(
           `Cannot complete 30. Employee status is ${employee.status}`,
         );
       }
       targetStatus = 'MILESTONE_30';
-    } else if (type === '60') {
+    } else if (type === 'M60') {
       if (employee.status !== 'MILESTONE_30') {
         throw new ConflictException(
           `Cannot complete 60. Employee status is ${employee.status}`,
         );
       }
       targetStatus = 'MILESTONE_60';
-    } else if (type === '90') {
+    } else if (type === 'M90') {
       if (
         employee.status !== 'MILESTONE_60' &&
         employee.status !== 'MILESTONE_90'

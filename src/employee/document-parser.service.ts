@@ -11,9 +11,12 @@ type PdfParserFn = (dataBuffer: Buffer) => Promise<PdfParseResult>;
 export class DocumentParserService {
   async extractPdfMetadata(buffer: Buffer): Promise<Record<string, unknown>> {
     try {
-      const pdfParser = pdf as unknown as PdfParserFn;
+      const pdfParser = (typeof pdf === 'function' ? pdf : (pdf as any).default) as PdfParserFn;
+      if (!pdfParser) {
+        throw new Error('pdf-parse module is not a function');
+      }
       const parsed = await pdfParser(buffer);
-      const text = parsed.text || '';
+      const text = parsed?.text || '';
 
       const metadata: Record<string, unknown> = {
         confidence: 1.0,

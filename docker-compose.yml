@@ -24,10 +24,12 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
-      PORT: ${PORT:-3000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-supreeth2026}@postgres:5432/${POSTGRES_DB:-onboarding_db}?schema=public
+      PORT: ${PORT:-8000}
     ports:
-      - '${PORT:-3000}:${PORT:-3000}'
+      - '${PORT:-8000}:${PORT:-8000}'
+    volumes:
+      - ./uploads:/usr/src/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -39,7 +41,8 @@ services:
     container_name: onboarding_frontend
     environment:
       # Only public/frontend variables — never pass backend secrets here
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      BACKEND_INTERNAL_URL: http://backend:8000
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3002}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
     ports:

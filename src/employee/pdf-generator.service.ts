@@ -14,6 +14,7 @@ export class PdfGeneratorService {
       department: string;
       joiningDate: string;
     },
+    signature?: string,
   ): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       // Use the default export constructor or standard class constructor
@@ -84,10 +85,25 @@ export class PdfGeneratorService {
       doc.moveDown(3);
 
       // Signature Block
-      doc
-        .fontSize(11)
-        .text('Authorized Signatory: ________________________', 50, doc.y);
-      doc.text(`Date: ${new Date().toLocaleDateString()}`, 350, doc.y - 12);
+      doc.fontSize(11);
+      const currentY = doc.y;
+      if (signature) {
+        if (signature.startsWith('data:image')) {
+          try {
+            const base64Data = signature.split(',')[1];
+            const sigBuffer = Buffer.from(base64Data, 'base64');
+            doc.text('Authorized Signatory: ', 50, currentY);
+            doc.image(sigBuffer, 160, currentY - 15, { width: 120, height: 35 });
+          } catch (e) {
+            doc.text(`Authorized Signatory: ${signature}`, 50, currentY);
+          }
+        } else {
+          doc.text(`Authorized Signatory: ${signature}`, 50, currentY);
+        }
+      } else {
+        doc.text('Authorized Signatory: ________________________', 50, currentY);
+      }
+      doc.text(`Date: ${new Date().toLocaleDateString()}`, 350, currentY);
 
       doc.end();
     });

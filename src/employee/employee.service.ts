@@ -41,6 +41,32 @@ export function mapEmployee(emp: PrismaEmployeeWithRelations): Employee {
       ? emp.complianceForms.map((c) => c.id)
       : [],
     milestoneIds: emp.milestones ? emp.milestones.map((m) => m.id) : [],
+    documents: emp.documents ? emp.documents.map((d) => ({
+      id: d.id,
+      employeeId: d.employeeId,
+      type: d.type,
+      status: d.status,
+      extracted: d.extracted,
+      reviewedBy: d.reviewedBy,
+      rejectionReason: d.rejectionReason,
+      storagePath: d.storagePath,
+    })) : [],
+    complianceForms: emp.complianceForms ? emp.complianceForms.map((c) => ({
+      id: c.id,
+      employeeId: c.employeeId,
+      type: c.type,
+      status: c.status,
+      deadline: c.deadline instanceof Date ? c.deadline.toISOString() : c.deadline,
+      data: c.data as Record<string, unknown>,
+    })) : [],
+    milestones: emp.milestones ? emp.milestones.map((m) => ({
+      id: m.id,
+      employeeId: m.employeeId,
+      type: m.type,
+      status: m.status,
+      dueDate: m.dueDate instanceof Date ? m.dueDate.toISOString() : m.dueDate,
+      checklist: m.checklist,
+    })) : [],
     createdAt:
       emp.createdAt instanceof Date
         ? emp.createdAt.toISOString()
@@ -130,7 +156,7 @@ export class EmployeeService {
   }
 
   async createEmployee(dto: CreateEmployeeDto): Promise<Employee> {
-    const employeeId = crypto.randomUUID();
+    const employeeId = `OP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const newEmployee = await this.db.employee.create({
       data: {
         id: employeeId,
@@ -160,8 +186,14 @@ export class EmployeeService {
     const tempPassword = crypto.randomBytes(6).toString('hex') + 'A1!';
     const passwordHash = await bcrypt.hash(tempPassword, 10);
 
-    await this.db.user.create({
-      data: {
+    await this.db.user.upsert({
+      where: { email: dto.email },
+      update: {
+        passwordHash,
+        role: 'NEW_HIRE',
+        employeeId: newEmployee.id,
+      },
+      create: {
         email: dto.email,
         passwordHash,
         role: 'NEW_HIRE',

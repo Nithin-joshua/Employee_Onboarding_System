@@ -15,13 +15,23 @@ import { DocumentParserService } from '../employee/document-parser.service';
 import * as crypto from 'crypto';
 import { DocumentType, Role, Prisma } from '@prisma/client';
 
-const REQUIRED_DOC_TYPES = [
+const MANDATORY_DOC_TYPES = [
   'AADHAAR',
   'PAN',
-  'EDUCATION',
-  'RELIEVING_LETTER',
+  'EDUCATION_10TH',
+  'EDUCATION_2ND_PUC',
+  'EDUCATION_DEGREE',
   'BANK_PROOF',
   'PHOTO',
+];
+
+const OPTIONAL_DOC_TYPES = [
+  'RELIEVING_LETTER',
+];
+
+const ALL_DOC_TYPES = [
+  ...MANDATORY_DOC_TYPES,
+  ...OPTIONAL_DOC_TYPES,
 ];
 
 @Injectable()
@@ -65,7 +75,7 @@ export class DocumentService {
     );
   }
 
-  // DOCUMENTS_PENDING -> DOCUMENTS_SUBMITTED
+  // DOCUMENTS_PENDING / INVITED -> DOCUMENTS_SUBMITTED
   async submitDocuments(
     employeeId: string,
     docs: { type: string }[],
@@ -74,41 +84,50 @@ export class DocumentService {
     const employee = await this.getEmployeeOrThrow(employeeId);
     this.validateRole(role, ['NEW_HIRE']);
 
-    if (employee.status !== 'DOCUMENTS_PENDING') {
+    if (employee.status !== 'DOCUMENTS_PENDING' && employee.status !== 'INVITED') {
       throw new ConflictException(
         `Cannot submit documents. Employee status is ${employee.status}`,
       );
     }
 
     const submittedTypes = docs.map((d) => d.type);
-    const hasAll = REQUIRED_DOC_TYPES.every((type) =>
+    const hasAll = MANDATORY_DOC_TYPES.every((type) =>
       submittedTypes.includes(type),
     );
     if (!hasAll) {
       throw new ConflictException(
-        'All 6 required document types must be present',
+        'All mandatory document types must be present',
       );
     }
 
     const updated = await this.db.$transaction(async (tx) => {
-      // Delete existing documents for this employee
-      await tx.document.deleteMany({
-        where: { employeeId },
-      });
-
-      for (const docType of REQUIRED_DOC_TYPES) {
-        await tx.document.create({
-          data: {
-            id: crypto.randomUUID(),
-            employeeId: employeeId,
-            type: docType as DocumentType,
-            status: 'SUBMITTED',
-            extracted: undefined,
-            reviewedBy: null,
-            rejectionReason: null,
-            storagePath: `${employeeId}/${docType.toUpperCase()}.pdf`,
-          },
+      for (const docType of ALL_DOC_TYPES) {
+        const existing = await tx.document.findFirst({
+          where: { employeeId, type: docType as DocumentType },
         });
+
+        if (existing) {
+          // Keep existing path and metadata, just set status to SUBMITTED
+          await tx.document.update({
+            where: { id: existing.id },
+            data: {
+              status: 'SUBMITTED',
+            },
+          });
+        } else if (MANDATORY_DOC_TYPES.includes(docType)) {
+          await tx.document.create({
+            data: {
+              id: crypto.randomUUID(),
+              employeeId: employeeId,
+              type: docType as DocumentType,
+              status: 'SUBMITTED',
+              extracted: undefined,
+              reviewedBy: null,
+              rejectionReason: null,
+              storagePath: `${employeeId}/${docType.toUpperCase()}.pdf`,
+            },
+          });
+        }
       }
 
       const emp = await tx.employee.update({
@@ -198,7 +217,10 @@ export class DocumentService {
       await this.db.document.update({
         where: { id: doc.id },
         data: {
-          extracted: result.fields as Prisma.InputJsonValue,
+          extracted: {
+            ...(result.fields as Record<string, any>),
+            confidence: result.confidence,
+          } as Prisma.InputJsonValue,
           status: 'EXTRACTED',
           storagePath,
         },
@@ -385,20 +407,33 @@ export class DocumentService {
     return this.getEmployeeOrThrow(employeeId);
   }
 
-  async getEmployeeDocuments(employeeId: string): Promise<Document[]> {
+  async getEmployeeDocuments(employeeId: string): Promise<any[]> {
     const docs = await this.db.document.findMany({
       where: { employeeId },
     });
-    return docs.map((doc) => ({
-      id: doc.id,
-      employeeId: doc.employeeId,
-      type: doc.type,
-      status: doc.status,
-      extracted: doc.extracted as Record<string, unknown> | null,
-      reviewedBy: doc.reviewedBy,
-      rejectionReason: doc.rejectionReason,
-      storagePath: doc.storagePath,
-    }));
+    const result = [];
+    for (const doc of docs) {
+      let signedUrl: string | null = null;
+      if (doc.storagePath && (process.env.STORAGE_PROVIDER === 'supabase' || !process.env.STORAGE_PROVIDER)) {
+        try {
+          signedUrl = await this.storageService.getSignedUrl(doc.storagePath);
+        } catch (e) {
+          console.error(`Failed to get signed URL for ${doc.storagePath}`, e);
+        }
+      }
+      result.push({
+        id: doc.id,
+        employeeId: doc.employeeId,
+        type: doc.type,
+        status: doc.status,
+        extracted: doc.extracted as Record<string, unknown> | null,
+        reviewedBy: doc.reviewedBy,
+        rejectionReason: doc.rejectionReason,
+        storagePath: doc.storagePath,
+        signedUrl,
+      });
+    }
+    return result;
   }
 
   async curateForReview(employeeId: string) {
@@ -406,7 +441,8 @@ export class DocumentService {
       where: { employeeId },
     });
 
-    return docs.map((doc) => {
+    const result = [];
+    for (const doc of docs) {
       const extracted = (doc.extracted || {}) as Record<string, unknown>;
       let curatedFields: Record<string, unknown> = {};
 
@@ -430,7 +466,16 @@ export class DocumentService {
         };
       }
 
-      return {
+      let signedUrl: string | null = null;
+      if (doc.storagePath && (process.env.STORAGE_PROVIDER === 'supabase' || !process.env.STORAGE_PROVIDER)) {
+        try {
+          signedUrl = await this.storageService.getSignedUrl(doc.storagePath);
+        } catch (e) {
+          console.error(`Failed to get signed URL for ${doc.storagePath}`, e);
+        }
+      }
+
+      result.push({
         id: doc.id,
         employeeId: doc.employeeId,
         type: doc.type,
@@ -439,8 +484,10 @@ export class DocumentService {
         rejectionReason: doc.rejectionReason,
         storagePath: doc.storagePath,
         extracted: curatedFields,
-      };
-    });
+        signedUrl,
+      });
+    }
+    return result;
   }
 
   // New upload flow handling multipart file

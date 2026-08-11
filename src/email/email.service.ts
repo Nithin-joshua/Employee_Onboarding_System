@@ -91,7 +91,7 @@ export class EmailService {
         body: JSON.stringify({
           sender: {
             name: 'Onboarding System',
-            email: 'no-reply@onboarding.com',
+            email: process.env.BREVO_SENDER_EMAIL || 'suprithchethu@gmail.com',
           },
           to: [{ email: to }],
           subject,
