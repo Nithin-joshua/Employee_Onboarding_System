@@ -1,82 +1,137 @@
-# Employee Onboarding System Monorepo
+# Employee Onboarding System
 
-This is a production-grade Employee Onboarding application containing a NestJS + Prisma backend API and a Next.js frontend application.
-
-## System Prerequisites
-Ensure you have the following installed locally:
-- Node.js (v18+ or v20+)
-- Docker (for Postgres)
+This repository contains a production-grade Employee Onboarding application split into a backend service and a frontend client.
 
 ---
 
-## 1. Backend API (NestJS) Setup
+## Folder Structure
 
-### Configure Environment Variables
-Copy `.env.example` to `.env` in the root folder:
-```bash
-cp .env.example .env
+The project is organized into two primary service folders:
+
+```text
+employee-system/
+├── backend/                  # NestJS API & Prisma Database Layer
+│   ├── src/                  # NestJS application source code
+│   ├── prisma/               # Database schema, migrations, and seeds
+│   ├── test/                 # Integration and E2E tests
+│   ├── .env.example          # Template for backend environment variables
+│   ├── package.json          # Backend dependencies and scripts
+│   └── tsconfig.json         # TypeScript configuration
+│
+└── frontend/                 # Next.js User Interface
+    ├── src/                  # Next.js pages and components
+    ├── .env.local.example    # Template for frontend environment variables
+    ├── package.json          # Frontend dependencies and scripts
+    └── next.config.js        # Next.js configuration
 ```
 
-Ensure the following variables are configured in `.env`:
-* `DATABASE_URL`: Connection string to your PostgreSQL instance.
-* `JWT_SECRET`: Secret key for signing backend access tokens (required; errors on startup in production if missing).
-* `NEXTAUTH_SECRET`: Secret key for frontend session security.
-* `OCR_MODE`: Set to `mock` to run offline/locally without real Mistral or Supabase credentials.
-* `MISTRAL_API_KEY`: Required if `OCR_MODE` is not `mock`.
-* `SUPABASE_URL` & `SUPABASE_SERVICE_ROLE_KEY`: Required if `OCR_MODE` is not `mock`.
-* `STORAGE_PROVIDER`: Set to `local` (uses local AES vault) or `supabase` (uses Supabase cloud buckets).
-* `VAULT_ENCRYPTION_KEY`: Symmetric key for local AES credential storage.
-* `CORS_ORIGIN`: Comma-separated allowlist of allowed domains (e.g. `http://localhost:3002`).
+---
 
-### Quick Start Commands
-From the root workspace folder:
+## 1. Database Configuration
 
-1. **Spin up PostgreSQL Database:**
+The backend uses **PostgreSQL** as its database, managed through **Prisma ORM**.
+
+### Prerequisites
+- Docker & Docker Compose (for running PostgreSQL locally)
+- Node.js (v18+ or v20+)
+
+### Setup Steps
+1. Navigate to the `backend` directory:
+   ```bash
+   cd backend
+   ```
+2. Copy the environment template to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+3. Configure the following database environment variables in `.env`:
+   - `DATABASE_URL`: Connection string to your PostgreSQL instance (e.g., `postgresql://postgres:secretpassword@localhost:5433/onboarding_db?schema=public`).
+   - `POSTGRES_USER`: The username for the database owner (e.g., `postgres`).
+   - `POSTGRES_PASSWORD`: The password for the database owner.
+   - `POSTGRES_DB`: The database name (e.g., `onboarding_db`).
+
+4. Spin up the PostgreSQL database container:
    ```bash
    docker compose up -d postgres
    ```
-2. **Deploy Database Migrations:**
+
+5. Deploy the Prisma database migrations:
    ```bash
    npx prisma migrate deploy
    ```
-3. **Seed Database (creates Manager, HR, and New Hire credentials):**
+
+6. Seed the database with initial roles (Manager, HR, New Hire):
    ```bash
    npx prisma db seed
-   ```
-4. **Start Development Server:**
-   ```bash
-   npm run start:dev
    ```
 
 ---
 
-## 2. Frontend App (Next.js) Setup
+## 2. Authentication (JWT Setup)
 
-From the `frontend` subdirectory:
+JSON Web Tokens (JWT) are used to secure communication between the frontend client and the NestJS backend APIs.
 
-### Configure Environment Variables
-Copy `.env.local.example` to `.env.local` inside the `frontend/` directory:
-```bash
-cd frontend
-cp .env.local.example .env.local
-```
+### Setup Steps
+1. In your backend `.env` file, locate the `JWT_SECRET` variable.
+2. Generate a secure, cryptographically random key of at least 32 characters. You can use the following command:
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
+3. Set the output value as the `JWT_SECRET` in your backend `.env`:
+   ```env
+   JWT_SECRET=your_generated_jwt_secret_value
+   ```
+4. The system validates this secret on startup. If it is missing or insecure, the backend will fail to start in production.
 
-Ensure the following variables are configured in `frontend/.env.local`:
-* `NEXT_PUBLIC_API_URL`: Points to the NestJS server (default: `http://127.0.0.1:3000`).
-* `NEXTAUTH_URL`: Points to the frontend client address (default: `http://localhost:3002`).
-* `NEXTAUTH_SECRET`: Must match the `NEXTAUTH_SECRET` defined in the root `.env`.
+---
 
-### Run Development Client
-From the `frontend/` directory:
+## 3. Document Encryption (Vault Password / Encryption Key)
+
+The onboarding system secures sensitive employee documents (such as IDs, tax forms, and contracts) using AES-256 symmetric encryption prior to storage.
+
+### Setup Steps
+1. In your backend `.env` file, locate the `VAULT_ENCRYPTION_KEY` variable (often referred to as the vault password).
+2. Generate a secure 32-byte key (represented as a 64-character hexadecimal string) using this command:
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
+3. Assign this value to `VAULT_ENCRYPTION_KEY` in `.env`:
+   ```env
+   VAULT_ENCRYPTION_KEY=your_generated_vault_encryption_key_value
+   ```
+4. **CRITICAL WARNING:** Ensure you do not lose this key. Any files uploaded while this key was active will become permanently unreadable if the key is lost or modified.
+
+---
+
+## 4. Running the Applications
+
+### Starting the Backend (NestJS)
+From the `backend` directory:
 ```bash
 npm install
-npm run dev
+npm run start:dev
 ```
+
+### Starting the Frontend (Next.js)
+From the `frontend` directory:
+1. Copy `.env.local.example` to `.env.local`:
+   ```bash
+   cp .env.local.example .env.local
+   ```
+2. Configure variables in `frontend/.env.local`:
+   - `NEXT_PUBLIC_API_URL`: Points to the backend NestJS server (e.g., `http://127.0.0.1:8000`).
+   - `NEXTAUTH_SECRET`: Frontend authentication secret (should match backend secret or be another secure key).
+3. Run the development server:
+   ```bash
+   npm install
+   npm run dev
+   ```
 
 ---
 
 ## Running Verification / Tests
-To run all tests inside the root directory:
+
+From the `backend` directory:
 
 **Unit Tests:**
 ```bash
@@ -87,3 +142,5 @@ npm test
 ```bash
 npm run test:e2e
 ```
+
+
