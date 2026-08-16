@@ -1,10 +1,11 @@
 # Multi-stage production build for Next.js Frontend
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /usr/src/app
 
 COPY package*.json ./
 
+RUN npm config set strict-ssl false && npm config set registry https://registry.npmjs.org/ && npm config set maxsockets 1
 RUN npm ci
 
 COPY . .
@@ -14,7 +15,7 @@ ENV NEXTAUTH_SECRET=placeholder-secret-for-build-stage
 RUN npm run build
 
 # Production image
-FROM node:20-alpine AS runner
+FROM node:20-slim AS runner
 
 WORKDIR /usr/src/app
 

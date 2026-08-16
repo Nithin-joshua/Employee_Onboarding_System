@@ -20,6 +20,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      network: host
     container_name: onboarding_backend
     env_file:
       - ./backend/.env
@@ -38,6 +39,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      network: host
     container_name: onboarding_frontend
     env_file:
       - ./frontend/.env.local

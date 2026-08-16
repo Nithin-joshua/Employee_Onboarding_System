@@ -101,35 +101,57 @@ The onboarding system secures sensitive employee documents (such as IDs, tax for
    ```
 4. **CRITICAL WARNING:** Ensure you do not lose this key. Any files uploaded while this key was active will become permanently unreadable if the key is lost or modified.
 
----
+## 4. Running the Applications (Dockerized)
 
-## 4. Running the Applications
+The entire onboarding suite is fully dockerized. Follow the commands below to build, start, run, and close the services:
 
-### Starting the Backend (NestJS)
-From the `backend` directory:
+### First-Time Build & Start
+Use the following command to install dependencies, run migrations, seed the database, and build the Docker images for all services (backend, frontend, postgres):
 ```bash
-npm install
-npm run start:dev
+# On Windows, you can double-click or run the setup batch script:
+setup.bat
+
+# Alternatively, run these steps manually:
+docker compose up -d postgres
+cd backend && npm install && npx prisma migrate deploy && npx prisma db seed && cd ..
+docker compose up -d --build
 ```
 
-### Starting the Frontend (Next.js)
-From the `frontend` directory:
-1. Copy `.env.local.example` to `.env.local`:
-   ```bash
-   cp .env.local.example .env.local
-   ```
-2. Configure variables in `frontend/.env.local`:
-   - `NEXT_PUBLIC_API_URL`: Points to the backend NestJS server (e.g., `http://127.0.0.1:8000`).
-   - `NEXTAUTH_SECRET`: Frontend authentication secret (should match backend secret or be another secure key).
-3. Run the development server:
-   ```bash
-   npm install
-   npm run dev
-   ```
+### Starting the Application (After Build)
+Once the images are built and the database is initialized, you can start the application quickly without rebuilding:
+```bash
+docker compose up -d
+```
+
+### Stopping / Closing the Application
+To stop all running containers without deleting database data:
+```bash
+docker compose down
+```
+To stop all containers and remove the database volumes:
+```bash
+docker compose down -v
+```
 
 ---
 
-## Running Verification / Tests
+## Seeded Dev Credentials
+
+Use these seeded accounts to log into the application at `http://localhost:3002`:
+
+| Role | Email | Password |
+| :--- | :--- | :--- |
+| **HR** | `hr@example.com` | `password123` |
+| **Manager** | `manager@example.com` | `password123` |
+| **New Hire (Low Salary)** | `alice@example.com` | `password123` |
+| **New Hire (Medium Salary)** | `charlie@example.com` | `password123` |
+| **New Hire (High Salary)** | `bob@example.com` | `password123` |
+
+- **Invitation Code**: `WELCOME2026`
+
+---
+
+## Running Verification / Tests (Locally)
 
 From the `backend` directory:
 
