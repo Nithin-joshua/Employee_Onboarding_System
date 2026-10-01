@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateInvitationDto {
   @ApiProperty({ example: 'Software Engineer', description: 'Job title' })
@@ -28,4 +28,13 @@ export class CreateInvitationDto {
   @IsString()
   @IsNotEmpty()
   joiningDate: string;
+
+  @ApiProperty({
+    example: 'candidate@example.com',
+    description: 'Candidate email address(es) to send onboarding invitation to',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  email?: string;
 }

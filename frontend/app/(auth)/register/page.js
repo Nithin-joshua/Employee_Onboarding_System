@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,6 +27,21 @@ export default function Register() {
     dob: '',
     phone: '',
   });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const codeParam = params.get('code');
+      const emailParam = params.get('email');
+      if (codeParam || emailParam) {
+        setForm((prev) => ({
+          ...prev,
+          invitationCode: codeParam ? codeParam.toUpperCase() : prev.invitationCode,
+          email: emailParam ? emailParam.trim() : prev.email,
+        }));
+      }
+    }
+  }, []);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 

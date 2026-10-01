@@ -97,7 +97,9 @@ export class ComplianceController {
     const forms = await this.complianceService.getEmployeeForms(employeeId);
     const form = forms.find((f) => f.id === formId);
     const formType = form ? form.type : 'STATUTORY_FORM';
-    const signature = form ? (form.data as Record<string, any>)?.signedBy : undefined;
+    const signature = form
+      ? (form.data as Record<string, any>)?.signedBy
+      : undefined;
 
     const pdfBuffer = await this.pdfGeneratorService.generateFormPDF(
       formType,

@@ -72,11 +72,92 @@ export class EmailService {
     );
   }
 
+  async sendInvitationEmail(
+    email: string,
+    jobTitle: string,
+    department: string,
+    code: string,
+    joiningDate?: string,
+  ): Promise<void> {
+    const formattedDate = joiningDate
+      ? new Date(joiningDate).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+      : null;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }
+            .card { background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 580px; margin: 0 auto; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+            .badge { display: inline-block; background-color: #ecfdf5; color: #059669; font-weight: 700; font-size: 11px; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.05em; }
+            h1 { font-size: 22px; color: #0f172a; margin-top: 16px; margin-bottom: 8px; }
+            p { font-size: 14px; line-height: 1.6; color: #475569; margin: 8px 0; }
+            .code-box { background: #f8fafc; border: 2px dashed #059669; border-radius: 10px; padding: 18px; text-align: center; margin: 24px 0; }
+            .code-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; font-weight: 700; margin-bottom: 6px; }
+            .code-value { font-family: monospace; font-size: 30px; font-weight: 800; color: #059669; letter-spacing: 6px; }
+            .steps { background: #f8fafc; border-radius: 8px; padding: 16px 20px; margin: 20px 0; }
+            .steps ol { margin: 0; padding-left: 20px; font-size: 13px; color: #334155; line-height: 1.6; }
+            .footer { font-size: 12px; color: #94a3b8; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <span class="badge">Official Selection Offer</span>
+            <h1>Congratulations! You've Been Selected! 🎉</h1>
+            <p>We are delighted to offer you the position of <strong>${jobTitle}</strong> in the <strong>${department}</strong> department.</p>
+            ${formattedDate ? `<p><strong>Expected Joining Date:</strong> ${formattedDate}</p>` : ''}
+            
+            <p>To begin your onboarding journey and upload your verification documents, please use your unique invitation code below:</p>
+            
+            <div class="code-box">
+              <div class="code-label">Your Unique Invitation Code</div>
+              <div class="code-value">${code}</div>
+            </div>
+
+            <div class="steps">
+              <p style="margin: 0 0 8px 0; font-weight: 600; font-size: 13px; color: #0f172a;">Next Steps:</p>
+              <ol>
+                <li>Open the Employee Onboarding registration page.</li>
+                <li>Enter your personal details along with your unique invitation code (<strong>${code}</strong>).</li>
+                <li>Set up your secure password and verify your email via the 6-digit OTP.</li>
+                <li>Upload your mandatory documents (Aadhaar, PAN, Educational Marks Cards, Bank Proof, Photo).</li>
+              </ol>
+            </div>
+
+            <div class="footer">
+              <p>This is an automated notification from the Employee Onboarding System. If you did not expect this invitation, please contact your HR coordinator.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await this.sendMail(
+      email,
+      `Congratulations! You've been selected for ${jobTitle} - Complete Your Onboarding`,
+      htmlContent,
+    );
+  }
+
   private async sendMail(to: string, subject: string, htmlContent: string) {
     if (!this.apiKey) {
       // No API key configured — log to console. Set BREVO_API_KEY in .env to send real emails.
       console.log(
         `[EmailService] [LOG MODE] To: ${to} | Subject: ${subject} | (Set BREVO_API_KEY in .env to enable real email delivery)`,
+      );
+      return;
+    }
+
+    const senderEmail = process.env.BREVO_SENDER_EMAIL;
+    if (!senderEmail) {
+      console.error(
+        '[EmailService] BREVO_SENDER_EMAIL is not set in .env. Brevo requires a verified sender email.',
       );
       return;
     }
@@ -90,8 +171,8 @@ export class EmailService {
         },
         body: JSON.stringify({
           sender: {
-            name: 'Onboarding System',
-            email: process.env.BREVO_SENDER_EMAIL || 'suprithchethu@gmail.com',
+            name: 'Employee Onboarding System',
+            email: senderEmail,
           },
           to: [{ email: to }],
           subject,

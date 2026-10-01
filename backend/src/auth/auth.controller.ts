@@ -40,7 +40,15 @@ export class AuthController {
 
   @Roles('HR')
   @Post('create-system-user')
-  async createSystemUser(@Body() body: { email: string; pass: string; role: 'HR' | 'MANAGER'; employeeId?: string }) {
+  async createSystemUser(
+    @Body()
+    body: {
+      email: string;
+      pass: string;
+      role: 'HR' | 'MANAGER';
+      employeeId?: string;
+    },
+  ) {
     return this.authService.createSystemUser(body);
   }
 

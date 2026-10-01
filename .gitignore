@@ -1,0 +1,62 @@
+# compiled output
+/dist
+/node_modules
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+
+# IDE
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Prisma generated client
+/generated/prisma
+generated/
+
+# Environment files — NEVER commit secrets
+.env
+.env.local
+backend/.env
+frontend/.env.local
+
+# Generated / build artifacts
+/coverage
+/uploads
+*.enc
+
+# Tooling directories
+.agents/
+.claude/
+.windsurf/
+/scratch/
+
+# Old runtime fixtures directory
+/fixtures/
+
+# Build output
+/dist/
+
+# Office / Word documents and temp files (do not commit word documents)
+*.docx
+*.doc
+~$*.docx
+~$*.doc
+report/*.docx
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class

@@ -93,7 +93,10 @@ export class PdfGeneratorService {
             const base64Data = signature.split(',')[1];
             const sigBuffer = Buffer.from(base64Data, 'base64');
             doc.text('Authorized Signatory: ', 50, currentY);
-            doc.image(sigBuffer, 160, currentY - 15, { width: 120, height: 35 });
+            doc.image(sigBuffer, 160, currentY - 15, {
+              width: 120,
+              height: 35,
+            });
           } catch (e) {
             doc.text(`Authorized Signatory: ${signature}`, 50, currentY);
           }
@@ -101,7 +104,11 @@ export class PdfGeneratorService {
           doc.text(`Authorized Signatory: ${signature}`, 50, currentY);
         }
       } else {
-        doc.text('Authorized Signatory: ________________________', 50, currentY);
+        doc.text(
+          'Authorized Signatory: ________________________',
+          50,
+          currentY,
+        );
       }
       doc.text(`Date: ${new Date().toLocaleDateString()}`, 350, currentY);
 

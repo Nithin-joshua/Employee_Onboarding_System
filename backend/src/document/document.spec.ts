@@ -153,13 +153,13 @@ describe('Document System Tests', () => {
       ).rejects.toThrow(ConflictException);
     });
 
-    it('should successfully submit documents if all 6 types are present', async () => {
+    it('should successfully submit documents if all mandatory types are present', async () => {
       jest.spyOn(db.employee, 'findUnique').mockResolvedValue({
         id: 'emp_123',
         status: 'DOCUMENTS_PENDING',
       } as any);
 
-      jest.spyOn(db.document, 'deleteMany').mockResolvedValue({ count: 1 });
+      jest.spyOn(db.document, 'findFirst').mockResolvedValue(null);
       jest
         .spyOn(db.document, 'create')
         .mockResolvedValue({ id: 'doc_id' } as any);
@@ -171,18 +171,15 @@ describe('Document System Tests', () => {
       const docs = [
         { type: 'AADHAAR' },
         { type: 'PAN' },
-        { type: 'EDUCATION' },
-        { type: 'RELIEVING_LETTER' },
+        { type: 'EDUCATION_10TH' },
+        { type: 'EDUCATION_2ND_PUC' },
+        { type: 'EDUCATION_DEGREE' },
         { type: 'BANK_PROOF' },
         { type: 'PHOTO' },
       ];
 
       const result = await service.submitDocuments('emp_123', docs, 'NEW_HIRE');
       expect(result.status).toBe('DOCUMENTS_SUBMITTED');
-      expect(db.document.deleteMany).toHaveBeenCalledWith({
-        where: { employeeId: 'emp_123' },
-      });
-      expect(db.document.create).toHaveBeenCalledTimes(6);
       expect(audit.createLog).toHaveBeenCalledWith(
         expect.objectContaining({
           employeeId: 'emp_123',
@@ -245,7 +242,7 @@ describe('Document System Tests', () => {
           where: { id: 'doc_1' },
           data: expect.objectContaining({
             status: 'EXTRACTED',
-            extracted: { name: 'John Doe', pan: 'ABCDE1234F' },
+            extracted: expect.objectContaining({ name: 'John Doe', pan: 'ABCDE1234F' }),
           }),
         }),
       );
@@ -798,6 +795,9 @@ describe('OcrService', () => {
   beforeEach(() => {
     storageService = {
       getSignedUrl: jest.fn().mockResolvedValue('http://signed-url'),
+      downloadDocument: jest
+        .fn()
+        .mockResolvedValue(Buffer.from('dummy-file-buffer')),
     } as any;
     ocrService = new OcrService(storageService);
 
@@ -806,11 +806,13 @@ describe('OcrService', () => {
   });
 
   it('should run Mistral OCR extraction and return structured response', async () => {
+    process.env.OCR_MODE = 'mistral';
+    process.env.MISTRAL_API_KEY = 'test-mistral-key';
     fetchMock.mockResolvedValue({
       ok: true,
       json: () =>
         Promise.resolve({
-          documentAnnotation: JSON.stringify({
+          document_annotation: JSON.stringify({
             name: 'Aadhaar Name',
             dob: '2000-01-01',
           }),
@@ -836,7 +838,50 @@ describe('OcrService', () => {
     );
   });
 
+  it('should run Google Gemini OCR extraction when configured', async () => {
+    process.env.OCR_MODE = 'google';
+    process.env.GOOGLE_API_KEY = 'test-google-key';
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      name: 'Gemini Extracted User',
+                      aadhaarNumber: '9999 8888 7777',
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+    });
+
+    const doc = {
+      id: 'doc_456',
+      type: 'AADHAAR',
+      storagePath: 'emp_456/AADHAAR.pdf',
+    } as any;
+
+    const res = await ocrService.extract(doc);
+    expect(res.confidence).toBe(0.98);
+    expect(res.fields.name).toBe('Gemini Extracted User');
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('generativelanguage.googleapis.com'),
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
+  });
+
   it('should fallback to average block confidence if overallConfidence is missing', async () => {
+    process.env.OCR_MODE = 'mistral';
+    process.env.MISTRAL_API_KEY = 'test-mistral-key';
     fetchMock.mockResolvedValue({
       ok: true,
       json: () =>

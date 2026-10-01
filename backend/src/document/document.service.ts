@@ -25,14 +25,9 @@ const MANDATORY_DOC_TYPES = [
   'PHOTO',
 ];
 
-const OPTIONAL_DOC_TYPES = [
-  'RELIEVING_LETTER',
-];
+const OPTIONAL_DOC_TYPES = ['RELIEVING_LETTER'];
 
-const ALL_DOC_TYPES = [
-  ...MANDATORY_DOC_TYPES,
-  ...OPTIONAL_DOC_TYPES,
-];
+const ALL_DOC_TYPES = [...MANDATORY_DOC_TYPES, ...OPTIONAL_DOC_TYPES];
 
 @Injectable()
 export class DocumentService {
@@ -84,7 +79,10 @@ export class DocumentService {
     const employee = await this.getEmployeeOrThrow(employeeId);
     this.validateRole(role, ['NEW_HIRE']);
 
-    if (employee.status !== 'DOCUMENTS_PENDING' && employee.status !== 'INVITED') {
+    if (
+      employee.status !== 'DOCUMENTS_PENDING' &&
+      employee.status !== 'INVITED'
+    ) {
       throw new ConflictException(
         `Cannot submit documents. Employee status is ${employee.status}`,
       );
@@ -220,7 +218,7 @@ export class DocumentService {
           extracted: {
             ...(result.fields as Record<string, any>),
             confidence: result.confidence,
-          } as Prisma.InputJsonValue,
+          },
           status: 'EXTRACTED',
           storagePath,
         },
@@ -414,7 +412,11 @@ export class DocumentService {
     const result = [];
     for (const doc of docs) {
       let signedUrl: string | null = null;
-      if (doc.storagePath && (process.env.STORAGE_PROVIDER === 'supabase' || !process.env.STORAGE_PROVIDER)) {
+      if (
+        doc.storagePath &&
+        (process.env.STORAGE_PROVIDER === 'supabase' ||
+          !process.env.STORAGE_PROVIDER)
+      ) {
         try {
           signedUrl = await this.storageService.getSignedUrl(doc.storagePath);
         } catch (e) {
@@ -467,7 +469,11 @@ export class DocumentService {
       }
 
       let signedUrl: string | null = null;
-      if (doc.storagePath && (process.env.STORAGE_PROVIDER === 'supabase' || !process.env.STORAGE_PROVIDER)) {
+      if (
+        doc.storagePath &&
+        (process.env.STORAGE_PROVIDER === 'supabase' ||
+          !process.env.STORAGE_PROVIDER)
+      ) {
         try {
           signedUrl = await this.storageService.getSignedUrl(doc.storagePath);
         } catch (e) {

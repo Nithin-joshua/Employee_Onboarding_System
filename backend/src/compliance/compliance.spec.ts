@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ComplianceService, computeComplianceLogic, mapComplianceForm } from './compliance.service';
+import {
+  ComplianceService,
+  computeComplianceLogic,
+  mapComplianceForm,
+} from './compliance.service';
 import { DbService } from '../db/db.service';
 import { MilestoneService } from '../milestone/milestone.service';
 import { EmployeeService } from '../employee/employee.service';
@@ -406,21 +410,25 @@ describe('Compliance Module Tests', () => {
         expect(() =>
           serviceWithValidate.validateRole('SYSTEM', ['SYSTEM']),
         ).not.toThrow();
-        expect(() => serviceWithValidate.validateRole('HR', ['HR'])).not.toThrow();
+        expect(() =>
+          serviceWithValidate.validateRole('HR', ['HR']),
+        ).not.toThrow();
         expect(() =>
           serviceWithValidate.validateRole('NEW_HIRE', ['NEW_HIRE']),
         ).not.toThrow();
-        expect(() => serviceWithValidate.validateRole('MANAGER', ['HR'])).toThrow(
-          ForbiddenException,
-        );
+        expect(() =>
+          serviceWithValidate.validateRole('MANAGER', ['HR']),
+        ).toThrow(ForbiddenException);
       });
     });
 
     describe('generateForms', () => {
       it('should call employeeService.generateComplianceForms', async () => {
-        const empService = (service as unknown as {
-          employeeService: { generateComplianceForms: jest.Mock };
-        }).employeeService;
+        const empService = (
+          service as unknown as {
+            employeeService: { generateComplianceForms: jest.Mock };
+          }
+        ).employeeService;
         await service.generateForms('emp_123');
         expect(empService.generateComplianceForms).toHaveBeenCalledWith(
           'emp_123',
@@ -832,6 +840,7 @@ describe('Compliance Module Tests', () => {
             department: 'R&D',
             joiningDate: '2026-09-01',
           },
+          undefined,
         );
         expect(res.setHeader).toHaveBeenCalledWith(
           'Content-Type',

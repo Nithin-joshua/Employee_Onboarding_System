@@ -222,7 +222,12 @@ export class AuthService {
     };
   }
 
-  async createSystemUser(dto: { email: string; pass: string; role: 'HR' | 'MANAGER'; employeeId?: string }) {
+  async createSystemUser(dto: {
+    email: string;
+    pass: string;
+    role: 'HR' | 'MANAGER';
+    employeeId?: string;
+  }) {
     const existingUser = await this.db.user.findUnique({
       where: { email: dto.email },
     });

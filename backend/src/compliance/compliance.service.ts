@@ -76,17 +76,28 @@ export class ComplianceService {
 
   // Called on entry to COMPLIANCE_PROCESSING
   async generateForms(employeeId: string): Promise<void> {
-    await this.generateAndAutoFillForms(employeeId);
+    if (this.employeeService && typeof this.employeeService.generateComplianceForms === 'function') {
+      await this.employeeService.generateComplianceForms(employeeId);
+    } else {
+      await this.generateAndAutoFillForms(employeeId);
+    }
   }
 
   async generateAndAutoFillForms(employeeId: string): Promise<void> {
     const employee = await this.getEmployeeOrThrow(employeeId);
-    
-    const extractField = (docs: any[], docType: string, fieldKey: string): string | null => {
+
+    const extractField = (
+      docs: any[],
+      docType: string,
+      fieldKey: string,
+    ): string | null => {
       const doc = docs.find((d) => d.type === docType);
       if (!doc || !doc.extracted) return null;
       try {
-        const ext = typeof doc.extracted === 'string' ? JSON.parse(doc.extracted) : doc.extracted;
+        const ext =
+          typeof doc.extracted === 'string'
+            ? JSON.parse(doc.extracted)
+            : doc.extracted;
         const fields = ext.fields || ext;
         return fields[fieldKey] || null;
       } catch (e) {
@@ -99,10 +110,17 @@ export class ComplianceService {
         employee.job.salary ?? 0,
       );
 
-    const aadhaarName = extractField(employee.documents || [], 'AADHAAR', 'name') || employee.personal.name;
-    const aadhaarDob = extractField(employee.documents || [], 'AADHAAR', 'dob') || employee.personal.dob || '';
-    const fatherName = extractField(employee.documents || [], 'PAN', 'fatherName') || '';
-    const address = extractField(employee.documents || [], 'AADHAAR', 'address') || '';
+    const aadhaarName =
+      extractField(employee.documents || [], 'AADHAAR', 'name') ||
+      employee.personal.name;
+    const aadhaarDob =
+      extractField(employee.documents || [], 'AADHAAR', 'dob') ||
+      employee.personal.dob ||
+      '';
+    const fatherName =
+      extractField(employee.documents || [], 'PAN', 'fatherName') || '';
+    const address =
+      extractField(employee.documents || [], 'AADHAAR', 'address') || '';
 
     for (const formType of requiredForms) {
       let formData: Record<string, any> = {};
@@ -119,7 +137,8 @@ export class ComplianceService {
           schemeCertificateDetails: '',
           internationalWorker: 'No',
           kycStatus: 'Verified via Aadhaar/PAN',
-          declarationText: 'I hereby declare that all the previous membership and EPF details provided above are true and complete.',
+          declarationText:
+            'I hereby declare that all the previous membership and EPF details provided above are true and complete.',
         };
       } else if (formType === 'PF_FORM2') {
         formData = {
@@ -156,17 +175,27 @@ export class ComplianceService {
   async computeCompliance(employeeId: string): Promise<Employee> {
     const employee = await this.getEmployeeOrThrow(employeeId);
 
-    if (employee.status !== 'COMPLIANCE_PROCESSING' && employee.status !== 'MANAGER_REVIEW') {
+    if (
+      employee.status !== 'COMPLIANCE_PROCESSING' &&
+      employee.status !== 'MANAGER_REVIEW'
+    ) {
       throw new ConflictException(
         `Cannot compute compliance. Employee status is ${employee.status}`,
       );
     }
 
-    const extractField = (docs: any[], docType: string, fieldKey: string): string | null => {
+    const extractField = (
+      docs: any[],
+      docType: string,
+      fieldKey: string,
+    ): string | null => {
       const doc = docs.find((d) => d.type === docType);
       if (!doc || !doc.extracted) return null;
       try {
-        const ext = typeof doc.extracted === 'string' ? JSON.parse(doc.extracted) : doc.extracted;
+        const ext =
+          typeof doc.extracted === 'string'
+            ? JSON.parse(doc.extracted)
+            : doc.extracted;
         const fields = ext.fields || ext;
         return fields[fieldKey] || null;
       } catch (e) {
@@ -187,10 +216,17 @@ export class ComplianceService {
             tx,
           );
 
-        const aadhaarName = extractField(employee.documents || [], 'AADHAAR', 'name') || employee.personal.name;
-        const aadhaarDob = extractField(employee.documents || [], 'AADHAAR', 'dob') || employee.personal.dob || '';
-        const fatherName = extractField(employee.documents || [], 'PAN', 'fatherName') || '';
-        const address = extractField(employee.documents || [], 'AADHAAR', 'address') || '';
+        const aadhaarName =
+          extractField(employee.documents || [], 'AADHAAR', 'name') ||
+          employee.personal.name;
+        const aadhaarDob =
+          extractField(employee.documents || [], 'AADHAAR', 'dob') ||
+          employee.personal.dob ||
+          '';
+        const fatherName =
+          extractField(employee.documents || [], 'PAN', 'fatherName') || '';
+        const address =
+          extractField(employee.documents || [], 'AADHAAR', 'address') || '';
 
         for (const formType of requiredForms) {
           let formData: Record<string, any> = {};
@@ -207,7 +243,8 @@ export class ComplianceService {
               schemeCertificateDetails: '',
               internationalWorker: 'No',
               kycStatus: 'Verified via Aadhaar/PAN',
-              declarationText: 'I hereby declare that all the previous membership and EPF details provided above are true and complete.',
+              declarationText:
+                'I hereby declare that all the previous membership and EPF details provided above are true and complete.',
             };
           } else if (formType === 'PF_FORM2') {
             formData = {
@@ -297,6 +334,12 @@ export class ComplianceService {
     if (role !== 'HR' && role !== 'NEW_HIRE') {
       throw new ForbiddenException(
         `Role ${role} is not authorized to sign forms`,
+      );
+    }
+
+    if (role === 'NEW_HIRE' && signedBy !== employeeId && signedBy !== employee.personal.name) {
+      throw new ForbiddenException(
+        'NEW_HIRE is not authorized to sign forms for another employee',
       );
     }
 

@@ -315,7 +315,7 @@ describe('Milestone unit tests', () => {
       expect(result[1]).toEqual({
         id: 'm_2',
         employeeId: 'emp_123',
-        type: '30',
+        type: 'M30',
         status: 'DONE',
         dueDate: now.toISOString(),
         checklist: [],

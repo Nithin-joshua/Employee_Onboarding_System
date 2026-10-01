@@ -25,6 +25,7 @@ export default function InvitationCodes() {
     managerId: '',
     salary: '',
     joiningDate: '',
+    email: '',
   });
 
   const fetchInvitations = useCallback(async () => {
@@ -65,6 +66,7 @@ export default function InvitationCodes() {
         managerId: form.managerId,
         salary: parseFloat(form.salary),
         joiningDate: form.joiningDate,
+        email: form.email?.trim() || undefined,
       };
 
       const result = await request('/invitations', {
@@ -72,13 +74,18 @@ export default function InvitationCodes() {
         body: JSON.stringify(payload),
       }, session);
 
-      setFormSuccess(`Code generated successfully: ${result.code}`);
+      const msg = result.emailsSent > 0
+        ? `Code generated (${result.code}) and invitation email sent to ${form.email}!`
+        : `Code generated successfully: ${result.code}`;
+
+      setFormSuccess(msg);
       setForm({
         jobTitle: '',
         department: '',
         managerId: '',
         salary: '',
         joiningDate: '',
+        email: '',
       });
       fetchInvitations();
     } catch (err) {
@@ -152,6 +159,7 @@ export default function InvitationCodes() {
               </th>
               <th className="py-3 px-5">Job Title</th>
               <th className="py-3 px-5">Department</th>
+              <th className="py-3 px-5 hidden md:table-cell">Candidate Email</th>
               <th className="py-3 px-5 hidden md:table-cell">Manager ID</th>
               <th className="py-3 px-5">Salary</th>
               <th className="py-3 px-5">Status</th>
@@ -160,7 +168,7 @@ export default function InvitationCodes() {
           <tbody className="divide-y divide-[var(--border-color)] text-[var(--foreground)] text-[13px]">
             {invitations.length === 0 ? (
               <tr>
-                <td colSpan="6" className="py-10 text-center text-[var(--text-muted)]">
+                <td colSpan="7" className="py-10 text-center text-[var(--text-muted)]">
                   No invitation codes generated yet.
                 </td>
               </tr>
@@ -170,6 +178,7 @@ export default function InvitationCodes() {
                   <td className="py-3 px-5 font-mono font-bold text-[var(--color-accent)] tracking-wider">{inv.code}</td>
                   <td className="py-3 px-5 font-medium">{inv.jobTitle}</td>
                   <td className="py-3 px-5">{inv.department}</td>
+                  <td className="py-3 px-5 text-xs text-[var(--text-muted)] hidden md:table-cell">{inv.email || '—'}</td>
                   <td className="py-3 px-5 font-mono text-xs text-[var(--text-muted)] hidden md:table-cell">{inv.managerId}</td>
                   <td className="py-3 px-5 font-semibold">${inv.salary.toLocaleString()}</td>
                   <td className="py-3 px-5">
@@ -257,6 +266,23 @@ export default function InvitationCodes() {
                     className="w-full h-10 px-3 rounded-[8px] border border-[var(--border-color)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] text-[14px]"
                     required
                   />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">
+                    Candidate Email (Auto-Sends Selection Notice)
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={form.email}
+                    onChange={handleChange}
+                    placeholder="e.g. candidate@example.com"
+                    className="w-full h-10 px-3 rounded-[8px] border border-[var(--border-color)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] text-[14px]"
+                  />
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    An email with the code and direct onboarding link will be sent automatically.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

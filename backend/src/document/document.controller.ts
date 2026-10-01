@@ -107,9 +107,13 @@ export class DocumentController {
     @Param('docType') docType: string,
     @UploadedFile() file: UploadedFileInterface,
   ) {
-    console.log(`[Upload Request] employeeId: ${employeeId}, docType: ${docType}, file exists: ${!!file}`);
+    console.log(
+      `[Upload Request] employeeId: ${employeeId}, docType: ${docType}, file exists: ${!!file}`,
+    );
     if (file) {
-      console.log(`[Upload Request] file size: ${file.buffer?.length} bytes, mimetype: ${file.mimetype}`);
+      console.log(
+        `[Upload Request] file size: ${file.buffer?.length} bytes, mimetype: ${file.mimetype}`,
+      );
     }
     return this.documentService.uploadDocumentFile(
       employeeId,

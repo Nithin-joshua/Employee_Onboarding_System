@@ -155,6 +155,7 @@ model InvitationCode {
   managerId   String
   salary      Int
   joiningDate DateTime
+  email       String?
   used        Boolean  @default(false)
   createdAt   DateTime @default(now())
 }

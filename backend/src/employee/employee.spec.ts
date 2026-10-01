@@ -54,6 +54,7 @@ describe('Employee Module Unit & Integration Tests', () => {
       },
       user: {
         create: jest.fn(),
+        upsert: jest.fn(),
       },
       outboxEvent: {
         create: jest.fn(),
@@ -81,10 +82,13 @@ describe('Employee Module Unit & Integration Tests', () => {
     emailServiceMock = {
       sendOnboardingInvite: jest.fn(),
       sendHireConfirmation: jest.fn(),
+      sendInvitationEmail: jest.fn(),
     };
 
     complianceServiceMock = {
       generateForms: jest.fn(),
+      computeCompliance: jest.fn(),
+      generateAndAutoFillForms: jest.fn(),
     };
 
     eventEmitterMock = {
@@ -290,9 +294,10 @@ describe('Employee Module Unit & Integration Tests', () => {
         const result = await employeeService.createEmployee(dto);
 
         expect(result.status).toBe('INVITED');
-        expect(dbMock.user.create).toHaveBeenCalledWith(
+        expect(dbMock.user.upsert).toHaveBeenCalledWith(
           expect.objectContaining({
-            data: expect.objectContaining({
+            where: { email: dto.email },
+            create: expect.objectContaining({
               email: dto.email,
               role: 'NEW_HIRE',
               employeeId: 'generated-uuid',
@@ -449,7 +454,7 @@ describe('Employee Module Unit & Integration Tests', () => {
         timestamp: expect.any(String),
       });
 
-      expect(complianceServiceMock.generateForms).toHaveBeenCalledWith(
+      expect(complianceServiceMock.computeCompliance).toHaveBeenCalledWith(
         'emp-123',
       );
       expect(emailServiceMock.sendHireConfirmation).toHaveBeenCalledWith(
@@ -474,7 +479,7 @@ describe('Employee Module Unit & Integration Tests', () => {
         },
       };
 
-      complianceServiceMock.generateForms.mockRejectedValue(
+      complianceServiceMock.computeCompliance.mockRejectedValue(
         new Error('Form gen failed'),
       );
 
@@ -1021,6 +1026,7 @@ describe('Employee Module Unit & Integration Tests', () => {
       const mockCreated = {
         code: 'A1B2C3D4',
         ...dto,
+        email: null,
         joiningDate: new Date(dto.joiningDate),
       };
       jest
@@ -1036,9 +1042,50 @@ describe('Employee Module Unit & Integration Tests', () => {
           managerId: dto.managerId,
           salary: dto.salary,
           joiningDate: new Date(dto.joiningDate),
+          email: null,
         },
       });
-      expect(result).toEqual({ code: 'A1B2C3D4' });
+      expect(result).toEqual({ code: 'A1B2C3D4', email: null, emailsSent: 0 });
+    });
+
+    it('createInvitation should send selection email when candidate email is provided', async () => {
+      const dto = {
+        jobTitle: 'Frontend Engineer',
+        department: 'Engineering',
+        managerId: 'mgr-456',
+        salary: 85000,
+        joiningDate: '2026-10-01',
+        email: 'candidate@example.com',
+      };
+      const mockCreated = {
+        code: 'CAND1234',
+        ...dto,
+        joiningDate: new Date(dto.joiningDate),
+      };
+      jest
+        .spyOn(dbMock.invitationCode, 'create')
+        .mockResolvedValue(mockCreated);
+
+      const result = await invitationController.createInvitation(dto);
+      expect(dbMock.invitationCode.create).toHaveBeenCalledWith({
+        data: {
+          code: expect.any(String),
+          jobTitle: dto.jobTitle,
+          department: dto.department,
+          managerId: dto.managerId,
+          salary: dto.salary,
+          joiningDate: new Date(dto.joiningDate),
+          email: 'candidate@example.com',
+        },
+      });
+      expect(emailServiceMock.sendInvitationEmail).toHaveBeenCalledWith(
+        'candidate@example.com',
+        'Frontend Engineer',
+        'Engineering',
+        'CAND1234',
+        '2026-10-01',
+      );
+      expect(result).toEqual({ code: 'CAND1234', email: 'candidate@example.com', emailsSent: 1 });
     });
   });
 });

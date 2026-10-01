@@ -16,15 +16,18 @@ import {
 } from '@prisma/client';
 
 function mapMilestoneToPrismaType(
-  type: 'DAY1' | 'M30' | 'M60' | 'M90',
+  type: 'DAY1' | 'M30' | 'M60' | 'M90' | '30' | '60' | '90',
 ): MilestoneType {
-  return type as MilestoneType;
+  if (type === '30' || type === 'M30') return 'M30';
+  if (type === '60' || type === 'M60') return 'M60';
+  if (type === '90' || type === 'M90') return 'M90';
+  return 'DAY1';
 }
 
 function mapPrismaTypeToMilestoneType(
   type: MilestoneType,
 ): 'DAY1' | 'M30' | 'M60' | 'M90' {
-  return type as any;
+  return type;
 }
 
 export function mapMilestone(m: PrismaMilestone): Milestone {
@@ -79,7 +82,12 @@ export class MilestoneService {
       where: { employeeId },
     });
 
-    const types: ('DAY1' | 'M30' | 'M60' | 'M90')[] = ['DAY1', 'M30', 'M60', 'M90'];
+    const types: ('DAY1' | 'M30' | 'M60' | 'M90')[] = [
+      'DAY1',
+      'M30',
+      'M60',
+      'M90',
+    ];
     for (const type of types) {
       await this.db.milestone.create({
         data: {
@@ -122,28 +130,28 @@ export class MilestoneService {
 
     // Validate state transition
     let targetStatus = employee.status;
-    if (type === 'DAY1') {
+    if (prismaType === 'DAY1') {
       if (employee.status !== 'DAY1_READY') {
         throw new ConflictException(
           `Cannot complete DAY1. Employee status is ${employee.status}`,
         );
       }
       targetStatus = 'ACTIVE';
-    } else if (type === 'M30') {
+    } else if (prismaType === 'M30') {
       if (employee.status !== 'ACTIVE') {
         throw new ConflictException(
           `Cannot complete 30. Employee status is ${employee.status}`,
         );
       }
       targetStatus = 'MILESTONE_30';
-    } else if (type === 'M60') {
+    } else if (prismaType === 'M60') {
       if (employee.status !== 'MILESTONE_30') {
         throw new ConflictException(
           `Cannot complete 60. Employee status is ${employee.status}`,
         );
       }
       targetStatus = 'MILESTONE_60';
-    } else if (type === 'M90') {
+    } else if (prismaType === 'M90') {
       if (
         employee.status !== 'MILESTONE_60' &&
         employee.status !== 'MILESTONE_90'

@@ -44,6 +44,7 @@ describe('EmailService', () => {
   describe('API Mode', () => {
     beforeEach(async () => {
       process.env.BREVO_API_KEY = 'test-api-key';
+      process.env.BREVO_SENDER_EMAIL = 'noreply@example.com';
       const module: TestingModule = await Test.createTestingModule({
         providers: [EmailService],
       }).compile();

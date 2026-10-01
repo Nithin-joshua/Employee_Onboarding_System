@@ -2,6 +2,7 @@ import { Controller, Post, Get, Body } from '@nestjs/common';
 import { DbService } from '../db/db.service';
 import { Roles } from '../auth/roles.decorator';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
+import { EmailService } from '../email/email.service';
 import {
   ApiTags,
   ApiOperation,
@@ -14,7 +15,10 @@ import * as crypto from 'crypto';
 @ApiBearerAuth()
 @Controller('invitations')
 export class InvitationController {
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly emailService: EmailService,
+  ) {}
 
   @Roles('HR')
   @Get()
@@ -46,9 +50,40 @@ export class InvitationController {
         managerId: dto.managerId,
         salary: Number(dto.salary),
         joiningDate: new Date(dto.joiningDate),
+        email: dto.email || null,
       },
     });
 
-    return { code: invitation.code };
+    let emailsSent = 0;
+    if (dto.email) {
+      const emailList = dto.email
+        .split(/[,;\s]+/)
+        .map((e) => e.trim())
+        .filter((e) => e.length > 0 && e.includes('@'));
+
+      for (const recipient of emailList) {
+        try {
+          await this.emailService.sendInvitationEmail(
+            recipient,
+            dto.jobTitle,
+            dto.department,
+            invitation.code,
+            dto.joiningDate,
+          );
+          emailsSent++;
+        } catch (err) {
+          console.error(
+            `[InvitationController] Failed to send invitation email to ${recipient}:`,
+            err,
+          );
+        }
+      }
+    }
+
+    return {
+      code: invitation.code,
+      email: invitation.email,
+      emailsSent,
+    };
   }
 }
