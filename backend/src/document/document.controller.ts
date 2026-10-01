@@ -7,6 +7,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -16,6 +17,7 @@ import {
   RejectDocumentDto,
 } from '../employee/dto/transitions.dto';
 import { Roles } from '../auth/roles.decorator';
+import { Public } from '../auth/public.decorator';
 import { AbacOwnershipGuard } from '../common/guards/abac-ownership.guard';
 import type { AuthenticatedRequest } from '../interfaces/types.interface';
 
@@ -121,5 +123,22 @@ export class DocumentController {
       file.buffer,
       file.mimetype,
     );
+  }
+
+  @Public()
+  @Get('documents/:docId/file')
+  async getDocumentFile(
+    @Param('employeeId') employeeId: string,
+    @Param('docId') docId: string,
+    @Res() res: any,
+  ) {
+    const { buffer, mimeType } = await this.documentService.getDocumentFile(
+      employeeId,
+      docId,
+    );
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.end(buffer);
   }
 }

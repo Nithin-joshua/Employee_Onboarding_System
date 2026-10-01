@@ -81,6 +81,23 @@ export class EmployeeController {
     return this.employeeService.openPreboardingLink(id, req.user.role);
   }
 
+  @Roles('HR')
+  @ApiOperation({ summary: 'Send an email to a candidate' })
+  @ApiParam({ name: 'id', description: 'Employee ID' })
+  @Post('employees/:id/send-email')
+  sendEmail(
+    @Param('id') id: string,
+    @Body() body: { subject: string; message: string },
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.employeeService.sendEmailToCandidate(
+      id,
+      body.subject,
+      body.message,
+      req.user.role,
+    );
+  }
+
   @Roles('HR', 'MANAGER')
   @ApiOperation({
     summary: 'Stream live employee status changes in real time via SSE',

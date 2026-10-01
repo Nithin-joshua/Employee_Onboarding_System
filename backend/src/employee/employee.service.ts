@@ -275,6 +275,46 @@ export class EmployeeService {
     return mapEmployee(updated);
   }
 
+  async sendEmailToCandidate(
+    employeeId: string,
+    subject: string,
+    message: string,
+    role: string,
+  ): Promise<{ success: boolean; message: string }> {
+    this.validateRole(role, ['HR']);
+    const emp = await this.getEmployee(employeeId);
+    if (!emp) {
+      throw new NotFoundException(`Employee ${employeeId} not found`);
+    }
+
+    const candidateEmail = (emp.personal as any)?.email;
+    const candidateName = (emp.personal as any)?.name || 'Candidate';
+    if (!candidateEmail) {
+      throw new ConflictException('Candidate has no email address configured');
+    }
+
+    await this.emailService.sendCustomCandidateEmail(
+      candidateEmail,
+      candidateName,
+      subject,
+      message,
+    );
+
+    await this.auditLogService.createLog({
+      employeeId,
+      fromStatus: emp.status,
+      toStatus: emp.status,
+      actorId: role,
+      actorRole: role as any,
+      note: `HR sent custom email to candidate: ${subject}`,
+    });
+
+    return {
+      success: true,
+      message: `Email successfully sent to ${candidateEmail}`,
+    };
+  }
+
   validateRole(
     role: string,
     allowed: string[],

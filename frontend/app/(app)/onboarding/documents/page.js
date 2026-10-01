@@ -82,6 +82,9 @@ export default function DocumentUploads() {
     } catch (err) {
       setActionError(err.message || 'Upload failed');
     } finally {
+      if (e.target) {
+        e.target.value = '';
+      }
       setUploading((prev) => ({ ...prev, [type]: false }));
     }
   };
@@ -204,6 +207,10 @@ export default function DocumentUploads() {
                 <input
                   type="file"
                   id={`file-input-${type}`}
+                  onClick={(e) => {
+                    e.target.value = null;
+                    setActionError('');
+                  }}
                   onChange={(e) => handleFileUpload(e, type)}
                   className="hidden"
                   accept="application/pdf,image/*"
@@ -282,7 +289,7 @@ export default function DocumentUploads() {
               {/* Actual File Preview */}
               {previewDoc.signedUrl ? (
                 <div className="border border-[var(--border-color)] rounded-[12px] overflow-hidden bg-neutral-900 flex items-center justify-center min-h-[300px]">
-                  {previewDoc.storagePath?.endsWith('.pdf') ? (
+                  {(previewDoc.isPdf || previewDoc.mimeType === 'application/pdf' || previewDoc.storagePath?.toLowerCase().endsWith('.pdf') || !previewDoc.storagePath?.match(/\.(png|jpg|jpeg|webp)$/i)) ? (
                     <iframe
                       src={`${previewDoc.signedUrl}#toolbar=0`}
                       className="w-full h-[400px] border-none"

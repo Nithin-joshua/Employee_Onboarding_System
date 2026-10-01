@@ -12,6 +12,7 @@ import { StorageService } from './storage.service';
 import { ComplianceService } from '../compliance/compliance.service';
 import { mapEmployee } from '../employee/employee.service';
 import { DocumentParserService } from '../employee/document-parser.service';
+import { EmailService } from '../email/email.service';
 import * as crypto from 'crypto';
 import { DocumentType, Role, Prisma } from '@prisma/client';
 
@@ -38,6 +39,7 @@ export class DocumentService {
     private readonly complianceService: ComplianceService,
     private readonly documentParserService: DocumentParserService,
     private readonly auditLogService: AuditLogService,
+    private readonly emailService: EmailService,
   ) {}
 
   private async getEmployeeOrThrow(id: string): Promise<Employee> {
@@ -182,13 +184,40 @@ export class DocumentService {
         try {
           const decryptedBuffer =
             await this.storageService.downloadDocument(storagePath);
-          const fields =
-            await this.documentParserService.extractPdfMetadata(
-              decryptedBuffer,
-            );
+          let fields: Record<string, unknown> = {};
+          let confidence = 1.0;
+
+          if (
+            process.env.NODE_ENV !== 'test' &&
+            this.ocrService &&
+            typeof this.ocrService.extractBuffer === 'function' &&
+            (process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY)
+          ) {
+            try {
+              const ocrRes = await this.ocrService.extractBuffer(
+                decryptedBuffer,
+                doc.type,
+              );
+              fields = ocrRes.fields;
+              confidence = ocrRes.confidence;
+            } catch {
+              fields =
+                await this.documentParserService.extractPdfMetadata(
+                  decryptedBuffer,
+                );
+              confidence = (fields.confidence as number) ?? 0.95;
+            }
+          } else {
+            fields =
+              await this.documentParserService.extractPdfMetadata(
+                decryptedBuffer,
+              );
+            confidence = (fields.confidence as number) ?? 1.0;
+          }
+
           result = {
             fields,
-            confidence: (fields.confidence as number) ?? 1.0,
+            confidence,
           };
         } catch (err) {
           result = {
@@ -258,7 +287,8 @@ export class DocumentService {
     const employee = await this.getEmployeeOrThrow(employeeId);
     this.validateRole(role, ['HR']);
 
-    if (employee.status !== 'UNDER_REVIEW') {
+    const allowedStatuses = ['DOCUMENTS_PENDING', 'DOCUMENTS_SUBMITTED', 'UNDER_REVIEW', 'MANAGER_REVIEW'];
+    if (!allowedStatuses.includes(employee.status)) {
       throw new ConflictException(
         `Cannot verify document. Employee status is ${employee.status}`,
       );
@@ -282,10 +312,19 @@ export class DocumentService {
       },
     });
 
+    await this.auditLogService.createLog({
+      employeeId,
+      fromStatus: employee.status,
+      toStatus: employee.status,
+      actorId: role,
+      actorRole: role as Role,
+      note: `HR verified document: ${doc.type}`,
+    });
+
     return this.getEmployeeOrThrow(employeeId);
   }
 
-  // UNDER_REVIEW -> DOCUMENTS_PENDING
+  // HR rejects document -> transitions to DOCUMENTS_PENDING and sends email to candidate
   async rejectDocument(
     employeeId: string,
     docId: string,
@@ -295,7 +334,8 @@ export class DocumentService {
     const employee = await this.getEmployeeOrThrow(employeeId);
     this.validateRole(role, ['HR']);
 
-    if (employee.status !== 'UNDER_REVIEW') {
+    const allowedStatuses = ['DOCUMENTS_PENDING', 'DOCUMENTS_SUBMITTED', 'UNDER_REVIEW', 'MANAGER_REVIEW'];
+    if (!allowedStatuses.includes(employee.status)) {
       throw new ConflictException(
         `Cannot reject document. Employee status is ${employee.status}`,
       );
@@ -324,6 +364,7 @@ export class DocumentService {
         where: { id: employeeId },
         data: {
           status: 'DOCUMENTS_PENDING',
+          lastRejectionReason: `Document rejected (${doc.type}): ${reason}`,
         },
         include: {
           documents: true,
@@ -347,17 +388,32 @@ export class DocumentService {
       return emp;
     });
 
+    // Send email notification to candidate asynchronously
+    if (employee.personal && typeof employee.personal === 'object') {
+      const personal = employee.personal as Record<string, any>;
+      const candidateEmail = personal.email;
+      const candidateName = personal.name || 'Candidate';
+      if (candidateEmail) {
+        this.emailService
+          .sendDocumentRejectedEmail(candidateEmail, candidateName, doc.type, reason)
+          .catch((err) =>
+            console.error('[DocumentService] Failed to send document rejected email:', err),
+          );
+      }
+    }
+
     return mapEmployee(updated);
   }
 
-  // UNDER_REVIEW -> COMPLIANCE_PROCESSING
+  // HR approves all documents -> routes candidate to MANAGER_REVIEW
   async approveReview(employeeId: string, role: string): Promise<Employee> {
     const employee = await this.getEmployeeOrThrow(employeeId);
     this.validateRole(role, ['HR']);
 
-    if (employee.status !== 'UNDER_REVIEW') {
+    const allowedStatuses = ['UNDER_REVIEW', 'DOCUMENTS_SUBMITTED', 'DOCUMENTS_PENDING'];
+    if (!allowedStatuses.includes(employee.status)) {
       throw new ConflictException(
-        `Cannot approve review. Employee status is ${employee.status}`,
+        `Cannot approve review. Employee status is ${employee.status}. It must be submitted, pending, or under review.`,
       );
     }
 
@@ -368,14 +424,16 @@ export class DocumentService {
     const hasRejected = docs.some((d) => d.status === 'REJECTED');
     if (hasRejected) {
       throw new ConflictException(
-        'Cannot approve review. Some documents are still rejected.',
+        'Cannot approve review. Some documents are marked as rejected.',
       );
     }
 
-    const allVerified = docs.every((d) => d.status === 'VERIFIED');
-    if (!allVerified) {
+    const allMandatoryVerified = MANDATORY_DOC_TYPES.every((mandatoryType) =>
+      docs.some((d) => d.type === mandatoryType && d.status === 'VERIFIED'),
+    );
+    if (!allMandatoryVerified) {
       throw new ConflictException(
-        'Cannot approve review. All documents must be verified.',
+        'Cannot approve review. All 7 mandatory documents must be uploaded and verified by HR.',
       );
     }
 
@@ -402,6 +460,41 @@ export class DocumentService {
       return emp;
     });
 
+    // Notify assigned manager via email if configured
+    const managerId = (employee.job as any)?.managerId;
+    if (managerId) {
+      const cleanMid = String(managerId).replace(/^mgr_/, '').replace(/^mgr/, '');
+      this.db.user
+        .findFirst({
+          where: {
+            role: 'MANAGER',
+            OR: [
+              { employeeId: managerId },
+              { employeeId: `mgr_${cleanMid}` },
+              { email: managerId },
+            ],
+          },
+        })
+        .then((mgr) => {
+          if (mgr?.email) {
+            const candidateName = (employee.personal as any)?.name || 'New Hire';
+            const jobTitle = (employee.job as any)?.title || 'Role';
+            this.emailService
+              .sendManagerReviewNotification(
+                mgr.email,
+                'Manager',
+                candidateName,
+                jobTitle,
+                employeeId,
+              )
+              .catch((err) =>
+                console.error('[DocumentService] Failed to notify manager:', err),
+              );
+          }
+        })
+        .catch(() => {});
+    }
+
     return this.getEmployeeOrThrow(employeeId);
   }
 
@@ -411,18 +504,7 @@ export class DocumentService {
     });
     const result = [];
     for (const doc of docs) {
-      let signedUrl: string | null = null;
-      if (
-        doc.storagePath &&
-        (process.env.STORAGE_PROVIDER === 'supabase' ||
-          !process.env.STORAGE_PROVIDER)
-      ) {
-        try {
-          signedUrl = await this.storageService.getSignedUrl(doc.storagePath);
-        } catch (e) {
-          console.error(`Failed to get signed URL for ${doc.storagePath}`, e);
-        }
-      }
+      const preview = await this.resolvePreviewUrl(doc);
       result.push({
         id: doc.id,
         employeeId: doc.employeeId,
@@ -432,7 +514,9 @@ export class DocumentService {
         reviewedBy: doc.reviewedBy,
         rejectionReason: doc.rejectionReason,
         storagePath: doc.storagePath,
-        signedUrl,
+        signedUrl: preview.signedUrl,
+        isPdf: preview.isPdf,
+        mimeType: preview.mimeType,
       });
     }
     return result;
@@ -455,31 +539,25 @@ export class DocumentService {
           aadhaarNumber: extracted.aadhaarNumber || null,
           confidence: extracted.confidence ?? 0.95,
         };
+        if (extracted.gender !== undefined) curatedFields.gender = extracted.gender;
+        if (extracted.address !== undefined) curatedFields.address = extracted.address;
       } else if (doc.type === 'PAN') {
         curatedFields = {
           name: extracted.name || null,
           panNumber: extracted.panNumber || null,
           confidence: extracted.confidence ?? 0.95,
         };
+        if (extracted.dob !== undefined) curatedFields.dob = extracted.dob;
+        if (extracted.fatherName !== undefined) curatedFields.fatherName = extracted.fatherName;
       } else {
         curatedFields = {
           documentType: doc.type,
+          ...extracted,
           confidence: extracted.confidence ?? 0.95,
         };
       }
 
-      let signedUrl: string | null = null;
-      if (
-        doc.storagePath &&
-        (process.env.STORAGE_PROVIDER === 'supabase' ||
-          !process.env.STORAGE_PROVIDER)
-      ) {
-        try {
-          signedUrl = await this.storageService.getSignedUrl(doc.storagePath);
-        } catch (e) {
-          console.error(`Failed to get signed URL for ${doc.storagePath}`, e);
-        }
-      }
+      const preview = await this.resolvePreviewUrl(doc);
 
       result.push({
         id: doc.id,
@@ -490,7 +568,9 @@ export class DocumentService {
         rejectionReason: doc.rejectionReason,
         storagePath: doc.storagePath,
         extracted: curatedFields,
-        signedUrl,
+        signedUrl: preview.signedUrl,
+        isPdf: preview.isPdf,
+        mimeType: preview.mimeType,
       });
     }
     return result;
@@ -502,7 +582,7 @@ export class DocumentService {
     docType: string,
     buffer: Buffer,
     mimeType: string,
-  ): Promise<Document> {
+  ): Promise<any> {
     await this.getEmployeeOrThrow(employeeId);
 
     const storagePath = await this.storageService.uploadDocument(
@@ -512,9 +592,33 @@ export class DocumentService {
       mimeType,
     );
 
-    // Auto-extract metadata
-    const extracted =
-      await this.documentParserService.extractPdfMetadata(buffer);
+    // Auto-extract metadata using Google Gemini AI OCR (with fallback to pdf-parse / regex)
+    let extracted: Record<string, unknown> = {};
+    if (
+      process.env.NODE_ENV !== 'test' &&
+      this.ocrService &&
+      typeof this.ocrService.extractBuffer === 'function'
+    ) {
+      try {
+        const ocrResult = await this.ocrService.extractBuffer(
+          buffer,
+          docType,
+          mimeType,
+        );
+        extracted = {
+          ...ocrResult.fields,
+          confidence: ocrResult.confidence,
+        };
+      } catch (e) {
+        console.warn(
+          `[Auto-OCR Warning] OCR extraction failed, falling back to parser:`,
+          e,
+        );
+        extracted = await this.documentParserService.extractPdfMetadata(buffer);
+      }
+    } else {
+      extracted = await this.documentParserService.extractPdfMetadata(buffer);
+    }
 
     // Check if Document record already exists for this type
     let doc = await this.db.document.findFirst({
@@ -547,6 +651,8 @@ export class DocumentService {
       });
     }
 
+    const preview = await this.resolvePreviewUrl(doc);
+
     return {
       id: doc.id,
       employeeId: doc.employeeId,
@@ -556,6 +662,97 @@ export class DocumentService {
       reviewedBy: doc.reviewedBy,
       rejectionReason: doc.rejectionReason,
       storagePath: doc.storagePath,
+      signedUrl: preview.signedUrl,
+      isPdf: preview.isPdf,
+      mimeType: preview.mimeType,
     };
+  }
+
+  private async resolvePreviewUrl(doc: {
+    id: string;
+    employeeId: string;
+    storagePath: string | null;
+  }): Promise<{ signedUrl: string | null; isPdf: boolean; mimeType: string }> {
+    if (!doc.storagePath) {
+      return { signedUrl: null, isPdf: true, mimeType: 'application/pdf' };
+    }
+
+    let isPdf = !doc.storagePath.match(/\.(png|jpg|jpeg|webp)$/i);
+    let mimeType = isPdf ? 'application/pdf' : 'image/jpeg';
+    if (doc.storagePath.toLowerCase().endsWith('.png')) mimeType = 'image/png';
+
+    let signedUrl: string | null = null;
+    const isSupabase =
+      this.storageService &&
+      typeof this.storageService.isSupabaseEnabled === 'function'
+        ? this.storageService.isSupabaseEnabled()
+        : process.env.STORAGE_PROVIDER === 'supabase';
+
+    if (
+      !doc.storagePath.startsWith('uploads/') &&
+      isSupabase &&
+      typeof this.storageService?.getSignedUrl === 'function'
+    ) {
+      try {
+        signedUrl = await this.storageService.getSignedUrl(doc.storagePath);
+      } catch (e) {
+        console.warn(
+          `Failed to get signed URL from Supabase for ${doc.storagePath}:`,
+          e,
+        );
+      }
+    }
+
+    if (!signedUrl) {
+      const baseUrl =
+        process.env.BACKEND_PUBLIC_URL ||
+        process.env.BACKEND_URL ||
+        'http://127.0.0.1:3000';
+      signedUrl = `${baseUrl}/employees/${doc.employeeId}/documents/${doc.id}/file`;
+    }
+
+    return { signedUrl, isPdf, mimeType };
+  }
+
+  async getDocumentFile(
+    employeeId: string,
+    docId: string,
+  ): Promise<{ buffer: Buffer; mimeType: string }> {
+    const doc = await this.db.document.findFirst({
+      where: { id: docId, employeeId },
+    });
+    if (!doc || !doc.storagePath) {
+      throw new NotFoundException('Document file not found');
+    }
+
+    const buffer = await this.storageService.downloadDocument(doc.storagePath);
+    let mimeType = 'application/pdf';
+    if (buffer.length >= 4 && buffer.slice(0, 4).toString('ascii') === '%PDF') {
+      mimeType = 'application/pdf';
+    } else if (
+      buffer.length >= 3 &&
+      buffer[0] === 0xff &&
+      buffer[1] === 0xd8 &&
+      buffer[2] === 0xff
+    ) {
+      mimeType = 'image/jpeg';
+    } else if (
+      buffer.length >= 8 &&
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47
+    ) {
+      mimeType = 'image/png';
+    } else if (doc.storagePath.toLowerCase().endsWith('.png')) {
+      mimeType = 'image/png';
+    } else if (
+      doc.storagePath.toLowerCase().endsWith('.jpg') ||
+      doc.storagePath.toLowerCase().endsWith('.jpeg')
+    ) {
+      mimeType = 'image/jpeg';
+    }
+
+    return { buffer, mimeType };
   }
 }

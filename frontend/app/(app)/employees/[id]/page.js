@@ -7,7 +7,8 @@ import { request } from '../../../../lib/apiClient';
 import { 
   ArrowLeft, FileText, User, Briefcase, 
   FileCheck2, Clock, AlertTriangle, Loader2,
-  Mail, Phone, Calendar, DollarSign, Building, Edit3
+  Mail, Phone, Calendar, DollarSign, Building, Edit3,
+  CheckCircle2, XCircle, Send
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -115,6 +116,10 @@ export default function EmployeeDetail({ params: paramsPromise }) {
   const [previewDoc, setPreviewDoc] = useState(null);
   const [f11Data, setF11Data] = useState({});
   const [f2Data, setF2Data] = useState({});
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [customEmailSubject, setCustomEmailSubject] = useState('');
+  const [customEmailMessage, setCustomEmailMessage] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   useEffect(() => {
     if (employee?.complianceForms) {
@@ -169,7 +174,7 @@ export default function EmployeeDetail({ params: paramsPromise }) {
       await request(`/employees/${params.id}/approve-review`, {
         method: 'POST',
       }, session);
-      setActionMessage({ text: 'Approved to Manager Review phase', type: 'success' });
+      setActionMessage({ text: 'Approved! Candidate forwarded to Manager Review and manager notified.', type: 'success' });
       fetchEmployee();
     } catch (err) {
       setActionMessage({ text: err.message || 'Failed to approve review', type: 'error' });
@@ -198,7 +203,7 @@ export default function EmployeeDetail({ params: paramsPromise }) {
   const handleRejectDoc = async (docId) => {
     const reason = rejectionReason[docId];
     setActionMessage(null);
-    if (!reason) {
+    if (!reason || !reason.trim()) {
       setActionMessage({ text: 'Please enter a rejection reason first.', type: 'error' });
       return;
     }
@@ -206,14 +211,42 @@ export default function EmployeeDetail({ params: paramsPromise }) {
     try {
       await request(`/employees/${params.id}/reject-document`, {
         method: 'POST',
-        body: JSON.stringify({ docId, reason }),
+        body: JSON.stringify({ docId, reason: reason.trim() }),
       }, session);
-      setActionMessage({ text: 'Document rejected successfully', type: 'success' });
+      setActionMessage({ text: 'Document rejected successfully. Automated rejection email dispatched to candidate.', type: 'success' });
+      setRejectionReason(prev => ({ ...prev, [docId]: '' }));
       fetchEmployee();
     } catch (err) {
       setActionMessage({ text: err.message || 'Failed to reject document', type: 'error' });
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleSendCandidateEmail = async (e) => {
+    e.preventDefault();
+    if (!customEmailSubject.trim() || !customEmailMessage.trim()) {
+      setActionMessage({ text: 'Subject and message are required', type: 'error' });
+      return;
+    }
+    setSendingEmail(true);
+    setActionMessage(null);
+    try {
+      await request(`/employees/${params.id}/send-email`, {
+        method: 'POST',
+        body: JSON.stringify({
+          subject: customEmailSubject.trim(),
+          message: customEmailMessage.trim(),
+        }),
+      }, session);
+      setActionMessage({ text: `Email sent to ${employee.personal?.email} successfully!`, type: 'success' });
+      setEmailModalOpen(false);
+      setCustomEmailSubject('');
+      setCustomEmailMessage('');
+    } catch (err) {
+      setActionMessage({ text: err.message || 'Failed to send email', type: 'error' });
+    } finally {
+      setSendingEmail(false);
     }
   };
 
@@ -299,6 +332,20 @@ export default function EmployeeDetail({ params: paramsPromise }) {
   const isHR = session?.user?.role === 'HR';
   const isManager = session?.user?.role === 'MANAGER';
 
+  const mandatoryDocTypes = [
+    'AADHAAR',
+    'PAN',
+    'EDUCATION_10TH',
+    'EDUCATION_2ND_PUC',
+    'EDUCATION_DEGREE',
+    'BANK_PROOF',
+    'PHOTO',
+  ];
+  const verifiedMandatoryCount = mandatoryDocTypes.filter((type) =>
+    employee?.documents?.some((d) => d.type === type && d.status === 'VERIFIED'),
+  ).length;
+  const allMandatoryVerified = verifiedMandatoryCount === mandatoryDocTypes.length;
+
   const getStatusBadge = (status) => {
     const map = {
       ACTIVE:                 'bg-emerald-50 text-emerald-700 border border-emerald-100',
@@ -352,12 +399,22 @@ export default function EmployeeDetail({ params: paramsPromise }) {
           </div>
         </div>
 
-        <button 
-          onClick={() => router.back()} 
-          className="h-9 px-4 rounded-[10px] border border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--border-color)]/30 hover:border-[var(--border-hover)] transition-all text-xs font-semibold flex items-center gap-1.5 bg-[var(--card-bg)] shadow-sm relative z-10 shrink-0 self-start md:self-center"
-        >
-          <ArrowLeft className="w-4 h-4 text-[var(--text-muted)]" /> Back
-        </button>
+        <div className="flex items-center gap-2 relative z-10 shrink-0 self-start md:self-center">
+          {isHR && employee.personal?.email && (
+            <button
+              onClick={() => setEmailModalOpen(true)}
+              className="h-9 px-3.5 rounded-[10px] bg-emerald-600 hover:bg-emerald-700 text-white transition-all text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+            >
+              <Mail className="w-3.5 h-3.5" /> Email Candidate
+            </button>
+          )}
+          <button 
+            onClick={() => router.back()} 
+            className="h-9 px-4 rounded-[10px] border border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--border-color)]/30 hover:border-[var(--border-hover)] transition-all text-xs font-semibold flex items-center gap-1.5 bg-[var(--card-bg)] shadow-sm"
+          >
+            <ArrowLeft className="w-4 h-4 text-[var(--text-muted)]" /> Back
+          </button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -545,23 +602,55 @@ export default function EmployeeDetail({ params: paramsPromise }) {
 
       {/* 3. Documents review list */}
       <div className="p-5.5 bg-white/90 backdrop-blur-sm border border-emerald-100/60 rounded-[16px] shadow-sm shadow-emerald-500/5">
-        <div className="flex justify-between items-center mb-4 border-b border-emerald-100/60 pb-3">
-          <h2 className="text-[15px] font-bold text-neutral-800 flex items-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
-            <FileText className="w-4 h-4 text-emerald-600" /> Documents
-          </h2>
-          {isHR && employee.status === 'UNDER_REVIEW' && (
-            <button
-              onClick={handleApproveReview}
-              disabled={actionLoading}
-              className="bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white px-3.5 h-8 rounded-[8px] text-xs font-semibold transition-all disabled:opacity-50"
-            >
-              Approve Review
-            </button>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 border-b border-emerald-100/60 pb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-[15px] font-bold text-neutral-800 flex items-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+                <FileText className="w-4 h-4 text-emerald-600" /> Documents Verification
+              </h2>
+              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                allMandatoryVerified 
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
+              }`}>
+                {verifiedMandatoryCount} of 7 Mandatory Verified
+              </span>
+            </div>
+            <p className="text-[12px] text-neutral-500 mt-0.5">
+              Review and verify candidate credentials. Rejections automatically send an email notification with your feedback.
+            </p>
+          </div>
+
+          {isHR && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleApproveReview}
+                disabled={actionLoading || !allMandatoryVerified || employee.status === 'MANAGER_REVIEW'}
+                title={!allMandatoryVerified ? 'All 7 mandatory documents must be verified before sending to Manager' : 'Send to Manager for Final Sign-off'}
+                className={`px-4 h-8 rounded-[8px] text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                  employee.status === 'MANAGER_REVIEW'
+                    ? 'bg-neutral-100 text-neutral-500 border border-neutral-200 cursor-not-allowed'
+                    : allMandatoryVerified
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer hover:shadow'
+                    : 'bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed'
+                }`}
+              >
+                {employee.status === 'MANAGER_REVIEW' ? (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> In Manager Review
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" /> Approve & Send to Manager
+                  </>
+                )}
+              </button>
+            </div>
           )}
         </div>
 
         {employee.documents?.length === 0 ? (
-          <p className="text-[var(--text-muted)] text-[13px]">No documents uploaded</p>
+          <p className="text-[var(--text-muted)] text-[13px]">No documents uploaded yet</p>
         ) : (
           <div className="space-y-3">
             {employee.documents?.map((doc) => (
@@ -586,7 +675,7 @@ export default function EmployeeDetail({ params: paramsPromise }) {
                   )}
                 </div>
 
-                {isHR && employee.status === 'UNDER_REVIEW' && (
+                {isHR && (
                   <div 
                     onClick={(e) => e.stopPropagation()}
                     className="flex flex-wrap gap-2 items-center text-xs"
@@ -595,26 +684,26 @@ export default function EmployeeDetail({ params: paramsPromise }) {
                       <button
                         onClick={() => handleVerifyDoc(doc.id)}
                         disabled={actionLoading}
-                        className="bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white px-3.5 h-7 rounded-[8px] font-semibold transition-all"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 h-7 rounded-[8px] font-semibold transition-all flex items-center gap-1 shadow-sm"
                       >
-                        Verify
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Verify
                       </button>
                     )}
                     {doc.status !== 'REJECTED' && (
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-1.5 items-center">
                         <input
                           type="text"
-                          placeholder="Rejection reason"
+                          placeholder="Rejection reason (emailed to candidate)..."
                           value={rejectionReason[doc.id] || ''}
                           onChange={(e) => setRejectionReason({ ...rejectionReason, [doc.id]: e.target.value })}
-                          className="border border-[var(--border-color)] px-3 h-7 rounded-[8px] max-w-[150px] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--border-color)] text-xs"
+                          className="border border-neutral-300 px-2.5 h-7 rounded-[8px] w-56 bg-white text-neutral-800 focus:outline-none focus:ring-1 focus:ring-red-400 text-xs shadow-sm"
                         />
                         <button
                           onClick={() => handleRejectDoc(doc.id)}
                           disabled={actionLoading}
-                          className="border border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--border-color)]/40 px-3.5 h-7 rounded-[8px] font-semibold transition-all bg-[var(--card-bg)]"
+                          className="border border-red-200 text-red-700 hover:bg-red-50 px-3 h-7 rounded-[8px] font-semibold transition-all bg-white shadow-sm flex items-center gap-1"
                         >
-                          Reject
+                          <XCircle className="w-3.5 h-3.5" /> Reject
                         </button>
                       </div>
                     )}
@@ -963,7 +1052,7 @@ export default function EmployeeDetail({ params: paramsPromise }) {
               {/* Actual File Preview */}
               {previewDoc.signedUrl ? (
                 <div className="border border-[var(--border-color)] rounded-[12px] overflow-hidden bg-neutral-900 flex items-center justify-center min-h-[300px]">
-                  {previewDoc.storagePath?.endsWith('.pdf') ? (
+                  {(previewDoc.isPdf || previewDoc.mimeType === 'application/pdf' || previewDoc.storagePath?.toLowerCase().endsWith('.pdf') || !previewDoc.storagePath?.match(/\.(png|jpg|jpeg|webp)$/i)) ? (
                     <iframe
                       src={`${previewDoc.signedUrl}#toolbar=0`}
                       className="w-full h-[400px] border-none"
@@ -1055,7 +1144,7 @@ export default function EmployeeDetail({ params: paramsPromise }) {
             </div>
 
             {/* Action Footer */}
-            {isHR && employee.status === 'UNDER_REVIEW' && (
+            {isHR && (
               <div className="border-t border-[var(--border-color)] pt-4 mt-4 flex justify-end gap-2.5" onClick={(e) => e.stopPropagation()}>
                 {previewDoc.status !== 'VERIFIED' && (
                   <button
@@ -1064,19 +1153,19 @@ export default function EmployeeDetail({ params: paramsPromise }) {
                       setPreviewDoc(null);
                     }}
                     disabled={actionLoading}
-                    className="bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white px-4 h-9 rounded-[8px] text-xs font-bold transition-all"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 h-9 rounded-[8px] text-xs font-bold transition-all shadow-sm flex items-center gap-1"
                   >
-                    Verify Document
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Verify Document
                   </button>
                 )}
                 {previewDoc.status !== 'REJECTED' && (
                   <div className="flex gap-2 w-full sm:w-auto">
                     <input
                       type="text"
-                      placeholder="Rejection reason..."
+                      placeholder="Rejection reason (emailed to candidate)..."
                       value={rejectionReason[previewDoc.id] || ''}
                       onChange={(e) => setRejectionReason({ ...rejectionReason, [previewDoc.id]: e.target.value })}
-                      className="border border-[var(--border-color)] px-3 h-9 rounded-[8px] text-xs bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--border-color)] flex-1 sm:w-44"
+                      className="border border-neutral-300 px-3 h-9 rounded-[8px] text-xs bg-white text-neutral-800 focus:outline-none focus:ring-1 focus:ring-red-400 flex-1 sm:w-56 shadow-sm"
                     />
                     <button
                       onClick={() => {
@@ -1084,14 +1173,96 @@ export default function EmployeeDetail({ params: paramsPromise }) {
                         setPreviewDoc(null);
                       }}
                       disabled={actionLoading}
-                      className="border border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--border-color)]/40 px-4 h-9 rounded-[8px] text-xs font-bold transition-all bg-[var(--card-bg)] shrink-0"
+                      className="border border-red-200 text-red-700 hover:bg-red-50 px-4 h-9 rounded-[8px] text-xs font-bold transition-all bg-white shrink-0 shadow-sm flex items-center gap-1"
                     >
-                      Reject
+                      <XCircle className="w-3.5 h-3.5" /> Reject
                     </button>
                   </div>
                 )}
               </div>
             )}
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+
+    {/* Email Candidate Modal */}
+    <AnimatePresence>
+      {emailModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setEmailModalOpen(false)}
+            className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            className="relative w-full max-w-md bg-white border border-neutral-200 rounded-[16px] shadow-2xl p-6 z-10 space-y-4"
+          >
+            <div className="flex justify-between items-center border-b border-neutral-100 pb-3">
+              <div>
+                <h3 className="text-[17px] font-bold text-neutral-800 flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-emerald-600" /> Send Email to Candidate
+                </h3>
+                <p className="text-[11px] text-neutral-500 mt-0.5">
+                  To: <span className="font-semibold text-neutral-700">{employee.personal?.name} ({employee.personal?.email})</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setEmailModalOpen(false)}
+                className="h-7 w-7 rounded-full flex items-center justify-center border border-neutral-200 text-neutral-500 hover:bg-neutral-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSendCandidateEmail} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1">Subject</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Additional document clarification"
+                  value={customEmailSubject}
+                  onChange={(e) => setCustomEmailSubject(e.target.value)}
+                  className="w-full h-9 px-3 text-xs border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1">Message</label>
+                <textarea
+                  required
+                  rows={4}
+                  placeholder="Write your message to the candidate here..."
+                  value={customEmailMessage}
+                  onChange={(e) => setCustomEmailMessage(e.target.value)}
+                  className="w-full p-3 text-xs border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100">
+                <button
+                  type="button"
+                  onClick={() => setEmailModalOpen(false)}
+                  className="px-3.5 h-8 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendingEmail}
+                  className="px-4 h-8 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {sendingEmail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  {sendingEmail ? 'Sending...' : 'Send Email'}
+                </button>
+              </div>
+            </form>
           </motion.div>
         </div>
       )}

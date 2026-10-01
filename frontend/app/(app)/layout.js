@@ -66,7 +66,7 @@ export default function AppLayout({ children }) {
   const [displayName, setDisplayName] = useState(getInitialName());
 
   useEffect(() => {
-    if (!session || !session?.user?.employeeId) return;
+    if (!session || !session?.user?.employeeId || session?.user?.role !== 'NEW_HIRE') return;
     const fetchProfileDetails = async () => {
       try {
         const empData = await request(`/employees/${session.user.employeeId}`, { method: 'GET' }, session);

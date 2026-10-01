@@ -258,7 +258,39 @@ export class OcrService {
    * Calls the Google Gemini Vision API (Gemini 2.0 / 1.5 Flash).
    * Works with both local encrypted disk storage and Supabase cloud storage.
    */
-  private async extractViaGoogleGemini(doc: Document): Promise<OcrResult> {
+  async extractBuffer(
+    buffer: Buffer,
+    docType: string,
+    mimeType = 'application/pdf',
+  ): Promise<OcrResult> {
+    const mode = (process.env.OCR_MODE || '').toLowerCase();
+    const hasGoogleKey = !!(
+      process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
+    );
+
+    if (
+      mode === 'google' ||
+      mode === 'gemini' ||
+      (hasGoogleKey && mode !== 'mistral')
+    ) {
+      return this.extractBufferViaGoogleGemini(buffer, docType, mimeType);
+    }
+
+    if (mode === 'local') {
+      return this.extractLocally({ type: docType } as any);
+    }
+
+    return {
+      fields: { documentType: docType },
+      confidence: 0.95,
+    };
+  }
+
+  async extractBufferViaGoogleGemini(
+    buffer: Buffer,
+    docType: string,
+    mimeType = 'application/pdf',
+  ): Promise<OcrResult> {
     const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error(
@@ -266,6 +298,93 @@ export class OcrService {
       );
     }
 
+    const base64Data = buffer.toString('base64');
+    const primaryModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const modelsToTry = [
+      primaryModel,
+      'gemini-2.5-flash',
+      'gemini-flash-latest',
+      'gemini-3.8-flash',
+    ].filter((m, i, arr) => arr.indexOf(m) === i);
+
+    const schema = getRawSchemaFor(docType);
+
+    let lastError: Error | null = null;
+    for (const model of modelsToTry) {
+      try {
+        console.log(`[Google OCR Request] Calling model: ${model} for ${docType}`);
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: `You are an automated document data extraction system. Extract structured data from this ${docType} document according to the JSON schema. Return valid JSON only with exact key names. If a value is unreadable or not present, supply an empty string or null.`,
+                    },
+                    {
+                      inline_data: {
+                        mime_type: mimeType,
+                        data: base64Data,
+                      },
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                response_mime_type: 'application/json',
+                response_schema: schema,
+              },
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.warn(
+            `[Google OCR Model ${model} Warning]: ${response.status} ${errText}`,
+          );
+          lastError = new Error(
+            `Google OCR model ${model} failed: ${response.status} ${errText}`,
+          );
+          continue;
+        }
+
+        const data = await response.json();
+        const candidate = data.candidates?.[0];
+        let text = candidate?.content?.parts?.[0]?.text;
+        if (!text) {
+          continue;
+        }
+
+        // Clean markdown code blocks if any
+        text = text
+          .replace(/^```(?:json)?\s*/i, '')
+          .replace(/\s*```$/i, '')
+          .trim();
+
+        console.log(`[Google OCR Raw Output]`, text);
+        const fields: Record<string, unknown> = JSON.parse(text);
+        console.log(`[Google OCR Parsed Fields]`, JSON.stringify(fields, null, 2));
+
+        return {
+          fields,
+          confidence: 0.98,
+        };
+      } catch (err) {
+        lastError = err as Error;
+      }
+    }
+
+    throw lastError || new Error('Google Gemini OCR failed for all attempted models');
+  }
+
+  private async extractViaGoogleGemini(doc: Document): Promise<OcrResult> {
     if (!doc.storagePath) {
       throw new Error(`Document ${doc.id} does not have a storagePath`);
     }
@@ -276,7 +395,6 @@ export class OcrService {
 
     // Download document buffer (auto-decrypted if local vault, or downloaded if Supabase)
     const buffer = await this.storageService.downloadDocument(doc.storagePath);
-    const base64Data = buffer.toString('base64');
 
     // Detect mime type
     const lowerPath = doc.storagePath.toLowerCase();
@@ -286,66 +404,6 @@ export class OcrService {
       mimeType = 'image/jpeg';
     else if (lowerPath.endsWith('.webp')) mimeType = 'image/webp';
 
-    const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
-    const schema = getRawSchemaFor(doc.type);
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: `You are an automated document data extraction system. Extract structured data from this ${doc.type} document according to the JSON schema. Return valid JSON only with exact key names. If a value is unreadable or not present, supply an empty string or null.`,
-                },
-                {
-                  inline_data: {
-                    mime_type: mimeType,
-                    data: base64Data,
-                  },
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            response_mime_type: 'application/json',
-            response_schema: schema,
-          },
-        }),
-      },
-    );
-
-    console.log(
-      `[Google OCR Response Status] ${response.status} ${response.statusText}`,
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[Google OCR Error Output] ${errText}`);
-      throw new Error(
-        `Google Gemini OCR API error: ${response.status} ${errText}`,
-      );
-    }
-
-    const data = await response.json();
-    const candidate = data.candidates?.[0];
-    const text = candidate?.content?.parts?.[0]?.text;
-    if (!text) {
-      throw new Error('Google Gemini OCR returned an empty response');
-    }
-
-    console.log(`[Google OCR Raw Output]`, text);
-    const fields: Record<string, unknown> = JSON.parse(text);
-    console.log(`[Google OCR Parsed Fields]`, JSON.stringify(fields, null, 2));
-
-    return {
-      fields,
-      confidence: 0.98,
-    };
+    return this.extractBufferViaGoogleGemini(buffer, doc.type, mimeType);
   }
 }

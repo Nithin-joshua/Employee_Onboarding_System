@@ -35,8 +35,26 @@ export class StorageService {
     }
   }
 
-  private isSupabaseEnabled(): boolean {
+  isSupabaseEnabled(): boolean {
     return (process.env.STORAGE_PROVIDER || 'local') === 'supabase';
+  }
+
+  private async saveToLocalVault(
+    employeeId: string,
+    docType: string,
+    buffer: Buffer,
+  ): Promise<string> {
+    const { encryptedData, iv, authTag } =
+      this.localVaultService.encryptBuffer(buffer);
+    const packed = this.localVaultService.pack(encryptedData, iv, authTag);
+
+    const dir = path.join(process.cwd(), 'uploads', employeeId);
+    const filePath = path.join(dir, `${docType.toUpperCase()}.enc`);
+
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(filePath, packed);
+
+    return `uploads/${employeeId}/${docType.toUpperCase()}.enc`;
   }
 
   async uploadDocument(
@@ -46,43 +64,39 @@ export class StorageService {
     mimeType: string,
   ): Promise<string> {
     if (!this.isSupabaseEnabled()) {
-      // Local encrypted vault storage
-      const { encryptedData, iv, authTag } =
-        this.localVaultService.encryptBuffer(buffer);
-      const packed = this.localVaultService.pack(encryptedData, iv, authTag);
-
-      const dir = path.join(process.cwd(), 'uploads', employeeId);
-      const filePath = path.join(dir, `${docType.toUpperCase()}.enc`);
-
-      await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(filePath, packed);
-
-      return `uploads/${employeeId}/${docType.toUpperCase()}.enc`;
+      return this.saveToLocalVault(employeeId, docType, buffer);
     }
 
-    // Supabase Storage
-    const ext = mimeType.split('/')[1] || 'pdf';
-    const pathWithinBucket = `${employeeId}/${docType.toUpperCase()}.${ext}`;
+    try {
+      // Supabase Storage
+      const ext = mimeType.split('/')[1] || 'pdf';
+      const pathWithinBucket = `${employeeId}/${docType.toUpperCase()}.${ext}`;
 
-    const { error } = await this.supabase!.storage.from(
-      'employee_documents',
-    ).upload(pathWithinBucket, buffer, {
-      contentType: mimeType,
-      upsert: true,
-    });
+      const { error } = await this.supabase!.storage.from(
+        'employee_documents',
+      ).upload(pathWithinBucket, buffer, {
+        contentType: mimeType,
+        upsert: true,
+      });
 
-    if (error) {
-      throw new Error(`Failed to upload to Supabase storage: ${error.message}`);
+      if (error) {
+        console.warn(
+          `[Storage Warning] Supabase upload failed (${error.message}). Falling back to local encrypted vault.`,
+        );
+        return this.saveToLocalVault(employeeId, docType, buffer);
+      }
+
+      return pathWithinBucket;
+    } catch (err) {
+      console.warn(
+        `[Storage Warning] Supabase upload exception (${(err as Error).message}). Falling back to local encrypted vault.`,
+      );
+      return this.saveToLocalVault(employeeId, docType, buffer);
     }
-
-    return pathWithinBucket;
   }
 
   async getSignedUrl(storagePath: string): Promise<string> {
-    if (!this.isSupabaseEnabled()) {
-      // For local vault files, construct a local-accessible reference.
-      // The signed URL concept only applies to Supabase; for local files the
-      // OCR service must use downloadDocument() to get the decrypted buffer.
+    if (storagePath.startsWith('uploads/') || !this.isSupabaseEnabled()) {
       throw new Error(
         'getSignedUrl is only available when STORAGE_PROVIDER=supabase. ' +
           'For local storage, use downloadDocument() to obtain the file buffer.',
