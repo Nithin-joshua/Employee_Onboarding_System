@@ -35,6 +35,13 @@ export class CreateInvitationDto {
     required: false,
   })
   @IsOptional()
-  @IsString()
   email?: string;
+
+  @ApiProperty({
+    example: ['candidate1@example.com', 'candidate2@example.com'],
+    description: 'List of candidate email addresses to invite',
+    required: false,
+  })
+  @IsOptional()
+  emails?: string[] | string;
 }
