@@ -20,6 +20,7 @@ export interface PersonalDetails {
   dob?: string;
   phone?: string;
   email: string;
+  gender?: string;
 }
 
 export interface JobDetails {

@@ -1,3 +1,0 @@
-@echo off
-echo Starting Next.js frontend only...
-npm run dev

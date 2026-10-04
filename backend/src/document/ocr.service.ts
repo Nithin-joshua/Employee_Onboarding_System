@@ -49,6 +49,9 @@ export function buildSchemaFor(docType: string): Record<string, unknown> {
       schema = PanSchema;
       break;
     case 'EDUCATION':
+    case 'EDUCATION_10TH':
+    case 'EDUCATION_2ND_PUC':
+    case 'EDUCATION_DEGREE':
       schema = EducationSchema;
       break;
     case 'RELIEVING_LETTER':
@@ -84,6 +87,9 @@ export function getRawSchemaFor(docType: string): Record<string, unknown> {
     case 'PAN':
       return PanSchema;
     case 'EDUCATION':
+    case 'EDUCATION_10TH':
+    case 'EDUCATION_2ND_PUC':
+    case 'EDUCATION_DEGREE':
       return EducationSchema;
     case 'RELIEVING_LETTER':
       return RelievingLetterSchema;
@@ -151,6 +157,15 @@ export class OcrService {
   }
 
   async extract(doc: Document): Promise<OcrResult> {
+    if (doc.type.toUpperCase() === 'BANK_PROOF') {
+      return {
+        fields: {
+          note: 'Bank details verification is performed manually by HR. OCR extraction skipped.',
+        },
+        confidence: 1.0,
+      };
+    }
+
     const mode = (process.env.OCR_MODE || '').toLowerCase();
     const hasGoogleKey = !!(
       process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
@@ -263,6 +278,15 @@ export class OcrService {
     docType: string,
     mimeType = 'application/pdf',
   ): Promise<OcrResult> {
+    if (docType.toUpperCase() === 'BANK_PROOF') {
+      return {
+        fields: {
+          note: 'Bank details verification is performed manually by HR. OCR extraction skipped.',
+        },
+        confidence: 1.0,
+      };
+    }
+
     const mode = (process.env.OCR_MODE || '').toLowerCase();
     const hasGoogleKey = !!(
       process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
@@ -298,6 +322,14 @@ export class OcrService {
       );
     }
 
+    const upperDoc = docType.toUpperCase();
+    const isEducation = [
+      'EDUCATION',
+      'EDUCATION_10TH',
+      'EDUCATION_2ND_PUC',
+      'EDUCATION_DEGREE',
+    ].includes(upperDoc);
+
     const base64Data = buffer.toString('base64');
     const primaryModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
     const modelsToTry = [
@@ -308,6 +340,10 @@ export class OcrService {
     ].filter((m, i, arr) => arr.indexOf(m) === i);
 
     const schema = getRawSchemaFor(docType);
+
+    const promptText = isEducation
+      ? `You are an automated document data extraction system. For this educational certificate (${docType}), extract ONLY the overall percentage and/or CGPA (Grade Point Average) according to the JSON schema. Do NOT extract student personal info, subjects, or school/university details. Return valid JSON only with exact key names.`
+      : `You are an automated document data extraction system. Extract structured data from this ${docType} document according to the JSON schema. Return valid JSON only with exact key names. If a value is unreadable or not present, supply an empty string or null.`;
 
     let lastError: Error | null = null;
     for (const model of modelsToTry) {
@@ -325,7 +361,7 @@ export class OcrService {
                 {
                   parts: [
                     {
-                      text: `You are an automated document data extraction system. Extract structured data from this ${docType} document according to the JSON schema. Return valid JSON only with exact key names. If a value is unreadable or not present, supply an empty string or null.`,
+                      text: promptText,
                     },
                     {
                       inline_data: {
@@ -371,6 +407,29 @@ export class OcrService {
         console.log(`[Google OCR Raw Output]`, text);
         const fields: Record<string, unknown> = JSON.parse(text);
         console.log(`[Google OCR Parsed Fields]`, JSON.stringify(fields, null, 2));
+
+        if (isEducation) {
+          const cleanFields: Record<string, unknown> = {};
+          if (fields.percentageOrCgpa && String(fields.percentageOrCgpa).trim()) {
+            cleanFields.percentageOrCgpa = String(fields.percentageOrCgpa).trim();
+          }
+          if (fields.percentage && String(fields.percentage).trim()) {
+            cleanFields.percentage = String(fields.percentage).trim();
+            if (!cleanFields.percentageOrCgpa) {
+              cleanFields.percentageOrCgpa = cleanFields.percentage;
+            }
+          }
+          if (fields.cgpa && String(fields.cgpa).trim()) {
+            cleanFields.cgpa = String(fields.cgpa).trim();
+            if (!cleanFields.percentageOrCgpa) {
+              cleanFields.percentageOrCgpa = cleanFields.cgpa;
+            }
+          }
+          return {
+            fields: cleanFields,
+            confidence: 0.98,
+          };
+        }
 
         return {
           fields,

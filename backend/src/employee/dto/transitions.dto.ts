@@ -1,10 +1,11 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsNotEmpty,
   IsString,
   IsArray,
   ValidateNested,
   IsIn,
+  IsOptional,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -82,10 +83,18 @@ export class RejectDocumentDto {
 export class ApproveReviewDto {}
 
 export class SignFormDto {
-  @ApiProperty({ example: 'John Doe', description: 'Signature of the user' })
+  @ApiProperty({ example: 'John Doe', description: 'Signature or signer name' })
   @IsString()
   @IsNotEmpty()
   signedBy: string;
+
+  @ApiPropertyOptional({
+    example: 'data:image/png;base64,...',
+    description: 'Drawn or uploaded signature base64 data URL',
+  })
+  @IsOptional()
+  @IsString()
+  signature?: string;
 }
 
 export class CompleteMilestoneDto {

@@ -23,8 +23,8 @@ describe('Employee Onboarding Workflow (e2e)', () => {
 
   beforeAll(async () => {
     const employeesPath = path.join(
-      process.cwd(),
-      'fixtures',
+      __dirname,
+      '../prisma/seed-data',
       'employees.json',
     );
     const content = await fs.readFile(employeesPath, 'utf-8');
@@ -46,9 +46,9 @@ describe('Employee Onboarding Workflow (e2e)', () => {
       .useValue({
         extract: jest.fn().mockImplementation(async (doc: any) => {
           const filePath = path.join(
-            process.cwd(),
-            'fixtures',
-            'ocr-mock',
+            __dirname,
+            '../prisma/seed-data',
+            'ocr',
             `${doc.type}.json`,
           );
           const content = await fs.readFile(filePath, 'utf-8');

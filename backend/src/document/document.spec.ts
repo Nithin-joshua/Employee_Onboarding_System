@@ -6,6 +6,7 @@ import { ComplianceService } from '../compliance/compliance.service';
 import { DocumentParserService } from '../employee/document-parser.service';
 import { AuditLogService } from '../db/audit-log.service';
 import { DbService } from '../db/db.service';
+import { EmailService } from '../email/email.service';
 import { LocalVaultService } from '../common/services/local-vault.service';
 import { DocumentController } from './document.controller';
 import { Readable } from 'stream';
@@ -101,6 +102,14 @@ describe('Document System Tests', () => {
           provide: AuditLogService,
           useValue: {
             createLog: jest.fn(),
+          },
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendDocumentRejectionEmail: jest.fn(),
+            sendReviewApprovalEmail: jest.fn(),
+            sendInvitationEmail: jest.fn(),
           },
         },
       ],
@@ -441,8 +450,13 @@ describe('Document System Tests', () => {
       } as any);
 
       jest.spyOn(db.document, 'findMany').mockResolvedValue([
-        { id: '1', status: 'VERIFIED' },
-        { id: '2', status: 'VERIFIED' },
+        { id: '1', type: 'AADHAAR', status: 'VERIFIED' },
+        { id: '2', type: 'PAN', status: 'VERIFIED' },
+        { id: '3', type: 'EDUCATION_10TH', status: 'VERIFIED' },
+        { id: '4', type: 'EDUCATION_2ND_PUC', status: 'VERIFIED' },
+        { id: '5', type: 'EDUCATION_DEGREE', status: 'VERIFIED' },
+        { id: '6', type: 'BANK_PROOF', status: 'VERIFIED' },
+        { id: '7', type: 'PHOTO', status: 'VERIFIED' },
       ] as any);
 
       jest.spyOn(db.employee, 'update').mockResolvedValue({

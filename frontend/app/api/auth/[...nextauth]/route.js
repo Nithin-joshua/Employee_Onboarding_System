@@ -5,7 +5,7 @@ if (process.env.NODE_ENV === 'production' && !process.env.NEXTAUTH_SECRET) {
   throw new Error('NEXTAUTH_SECRET is required in production mode');
 }
 
-export const authOptions = {
+const authOptions = {
   providers: [
     CredentialsProvider({
       name: 'Credentials',

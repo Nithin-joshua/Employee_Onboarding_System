@@ -180,7 +180,14 @@ export class DocumentService {
 
       let result: { fields: Record<string, unknown>; confidence: number };
 
-      if (storagePath.startsWith('uploads/')) {
+      if (doc.type === 'BANK_PROOF') {
+        result = {
+          fields: {
+            note: 'Bank details verification is performed manually by HR. OCR extraction skipped.',
+          },
+          confidence: 1.0,
+        };
+      } else if (storagePath.startsWith('uploads/')) {
         try {
           const decryptedBuffer =
             await this.storageService.downloadDocument(storagePath);
@@ -193,6 +200,13 @@ export class DocumentService {
             typeof this.ocrService.extractBuffer === 'function' &&
             (process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY)
           ) {
+            const isEdu = [
+              'EDUCATION',
+              'EDUCATION_10TH',
+              'EDUCATION_2ND_PUC',
+              'EDUCATION_DEGREE',
+            ].includes((doc.type || '').toUpperCase());
+
             try {
               const ocrRes = await this.ocrService.extractBuffer(
                 decryptedBuffer,
@@ -204,13 +218,22 @@ export class DocumentService {
               fields =
                 await this.documentParserService.extractPdfMetadata(
                   decryptedBuffer,
+                  ...(isEdu ? [doc.type] : []),
                 );
               confidence = (fields.confidence as number) ?? 0.95;
             }
           } else {
+            const isEdu = [
+              'EDUCATION',
+              'EDUCATION_10TH',
+              'EDUCATION_2ND_PUC',
+              'EDUCATION_DEGREE',
+            ].includes((doc.type || '').toUpperCase());
+
             fields =
               await this.documentParserService.extractPdfMetadata(
                 decryptedBuffer,
+                ...(isEdu ? [doc.type] : []),
               );
             confidence = (fields.confidence as number) ?? 1.0;
           }
@@ -594,7 +617,12 @@ export class DocumentService {
 
     // Auto-extract metadata using Google Gemini AI OCR (with fallback to pdf-parse / regex)
     let extracted: Record<string, unknown> = {};
-    if (
+    if (docType === 'BANK_PROOF') {
+      extracted = {
+        note: 'Bank details verification is performed manually by HR. OCR extraction skipped.',
+        confidence: 1.0,
+      };
+    } else if (
       process.env.NODE_ENV !== 'test' &&
       this.ocrService &&
       typeof this.ocrService.extractBuffer === 'function'
@@ -614,10 +642,10 @@ export class DocumentService {
           `[Auto-OCR Warning] OCR extraction failed, falling back to parser:`,
           e,
         );
-        extracted = await this.documentParserService.extractPdfMetadata(buffer);
+        extracted = await this.documentParserService.extractPdfMetadata(buffer, docType);
       }
     } else {
-      extracted = await this.documentParserService.extractPdfMetadata(buffer);
+      extracted = await this.documentParserService.extractPdfMetadata(buffer, docType);
     }
 
     // Check if Document record already exists for this type

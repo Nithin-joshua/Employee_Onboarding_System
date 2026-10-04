@@ -121,6 +121,10 @@ export class ComplianceService {
       extractField(employee.documents || [], 'PAN', 'fatherName') || '';
     const address =
       extractField(employee.documents || [], 'AADHAAR', 'address') || '';
+    const aadhaarGender =
+      extractField(employee.documents || [], 'AADHAAR', 'gender') ||
+      employee.personal?.gender ||
+      'Not Specified';
 
     for (const formType of requiredForms) {
       let formData: Record<string, any> = {};
@@ -151,6 +155,24 @@ export class ComplianceService {
           percentageShare: '100%',
           guardianDetails: '',
           eNominationStatus: 'Pending Signature',
+        };
+      } else if (formType === 'ESI_FORM1') {
+        formData = {
+          employeeName: aadhaarName,
+          dob: aadhaarDob,
+          gender: aadhaarGender,
+          maritalStatus: 'Unmarried',
+          fatherOrSpouseName: fatherName || 'Father',
+          joiningDate: employee.job.joiningDate || '',
+          presentAddress: address || '',
+          permanentAddress: address || '',
+          dispensary: 'Nearest Designated ESI Dispensary',
+          branchOffice: 'Regional ESI Branch Office',
+          nomineeName: fatherName || 'Father',
+          relationship: fatherName ? 'Father' : '',
+          eNominationStatus: 'Pending Signature',
+          declarationText:
+            'I hereby register for Employee State Insurance coverage and confirm the accuracy of personal and nominee information.',
         };
       }
 
@@ -227,6 +249,10 @@ export class ComplianceService {
           extractField(employee.documents || [], 'PAN', 'fatherName') || '';
         const address =
           extractField(employee.documents || [], 'AADHAAR', 'address') || '';
+        const aadhaarGender =
+          extractField(employee.documents || [], 'AADHAAR', 'gender') ||
+          employee.personal?.gender ||
+          'Not Specified';
 
         for (const formType of requiredForms) {
           let formData: Record<string, any> = {};
@@ -257,6 +283,24 @@ export class ComplianceService {
               percentageShare: '100%',
               guardianDetails: '',
               eNominationStatus: 'Pending Signature',
+            };
+          } else if (formType === 'ESI_FORM1') {
+            formData = {
+              employeeName: aadhaarName,
+              dob: aadhaarDob,
+              gender: aadhaarGender,
+              maritalStatus: 'Unmarried',
+              fatherOrSpouseName: fatherName || 'Father',
+              joiningDate: employee.job.joiningDate || '',
+              presentAddress: address || '',
+              permanentAddress: address || '',
+              dispensary: 'Nearest Designated ESI Dispensary',
+              branchOffice: 'Regional ESI Branch Office',
+              nomineeName: fatherName || 'Father',
+              relationship: fatherName ? 'Father' : '',
+              eNominationStatus: 'Pending Signature',
+              declarationText:
+                'I hereby register for Employee State Insurance coverage and confirm the accuracy of personal and nominee information.',
             };
           }
 
@@ -327,6 +371,7 @@ export class ComplianceService {
     formId: string,
     signedBy: string,
     role: string,
+    signature?: string,
   ): Promise<Employee> {
     const employee = await this.getEmployeeOrThrow(employeeId);
 
@@ -337,7 +382,23 @@ export class ComplianceService {
       );
     }
 
-    if (role === 'NEW_HIRE' && signedBy !== employeeId && signedBy !== employee.personal.name) {
+    const isBase64Sig = (str?: string) =>
+      typeof str === 'string' &&
+      (str.startsWith('data:image') || str.startsWith('data:application'));
+
+    const signedByIsImage = isBase64Sig(signedBy);
+    const resolvedSignature =
+      signature || (signedByIsImage ? signedBy : undefined);
+    const resolvedSignedBy = signedByIsImage
+      ? employee.personal?.name || employeeId
+      : signedBy;
+
+    if (
+      role === 'NEW_HIRE' &&
+      !signedByIsImage &&
+      signedBy !== employeeId &&
+      signedBy !== employee.personal?.name
+    ) {
       throw new ForbiddenException(
         'NEW_HIRE is not authorized to sign forms for another employee',
       );
@@ -360,7 +421,8 @@ export class ComplianceService {
 
     const updatedData = {
       ...(form.data as Record<string, any>),
-      signedBy,
+      signedBy: resolvedSignedBy,
+      signature: resolvedSignature,
       signedAt: new Date().toISOString(),
     };
 
@@ -394,7 +456,7 @@ export class ComplianceService {
             employeeId,
             fromStatus: employee.status,
             toStatus: 'DAY1_READY',
-            actorId: signedBy,
+            actorId: role === 'NEW_HIRE' ? employeeId : resolvedSignedBy,
             actorRole: role,
             note: 'All compliance forms signed, advanced to Day 1 Ready.',
           },

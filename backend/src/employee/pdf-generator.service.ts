@@ -47,14 +47,29 @@ export class PdfGeneratorService {
       doc.fontSize(16).text('Candidate Information', { underline: true });
       doc.moveDown(0.5);
 
+      const formatDate = (val?: string) => {
+        if (!val) return 'N/A';
+        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val)) {
+          const d = new Date(val);
+          if (!isNaN(d.getTime())) {
+            return d.toLocaleDateString('en-IN', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            });
+          }
+        }
+        return val;
+      };
+
       const items = [
-        { label: 'Full Name', val: candidate.name },
-        { label: 'Date of Birth', val: candidate.dob },
-        { label: 'Phone Number', val: candidate.phone },
-        { label: 'Email Address', val: candidate.email },
-        { label: 'Designation / Title', val: candidate.title },
-        { label: 'Department', val: candidate.department },
-        { label: 'Date of Joining', val: candidate.joiningDate },
+        { label: 'Full Name', val: candidate.name || 'N/A' },
+        { label: 'Date of Birth', val: formatDate(candidate.dob) },
+        { label: 'Phone Number', val: candidate.phone || 'N/A' },
+        { label: 'Email Address', val: candidate.email || 'N/A' },
+        { label: 'Designation / Title', val: candidate.title || 'N/A' },
+        { label: 'Department', val: candidate.department || 'N/A' },
+        { label: 'Date of Joining', val: formatDate(candidate.joiningDate) },
       ];
 
       items.forEach((item) => {

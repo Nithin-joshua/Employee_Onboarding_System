@@ -56,6 +56,7 @@ export class ComplianceController {
       formId,
       dto.signedBy,
       req.user.role,
+      ...(dto.signature ? [dto.signature] : []),
     );
   }
 
@@ -97,9 +98,8 @@ export class ComplianceController {
     const forms = await this.complianceService.getEmployeeForms(employeeId);
     const form = forms.find((f) => f.id === formId);
     const formType = form ? form.type : 'STATUTORY_FORM';
-    const signature = form
-      ? (form.data as Record<string, any>)?.signedBy
-      : undefined;
+    const formData = form?.data as Record<string, any> | undefined;
+    const signature = formData?.signature || formData?.signedBy;
 
     const pdfBuffer = await this.pdfGeneratorService.generateFormPDF(
       formType,
