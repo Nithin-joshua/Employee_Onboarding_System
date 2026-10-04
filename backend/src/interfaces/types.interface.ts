@@ -1,6 +1,7 @@
 import { Request } from 'express';
 
 export type EmployeeStatus =
+  | 'REGISTERED'
   | 'INVITED'
   | 'DOCUMENTS_PENDING'
   | 'DOCUMENTS_SUBMITTED'
