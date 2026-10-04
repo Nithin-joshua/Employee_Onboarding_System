@@ -82,6 +82,7 @@ export class DocumentService {
     this.validateRole(role, ['NEW_HIRE']);
 
     if (
+      employee.status !== 'REGISTERED' &&
       employee.status !== 'DOCUMENTS_PENDING' &&
       employee.status !== 'INVITED'
     ) {
@@ -310,7 +311,7 @@ export class DocumentService {
     const employee = await this.getEmployeeOrThrow(employeeId);
     this.validateRole(role, ['HR']);
 
-    const allowedStatuses = ['DOCUMENTS_PENDING', 'DOCUMENTS_SUBMITTED', 'UNDER_REVIEW', 'MANAGER_REVIEW'];
+    const allowedStatuses = ['REGISTERED', 'DOCUMENTS_PENDING', 'DOCUMENTS_SUBMITTED', 'UNDER_REVIEW', 'MANAGER_REVIEW'];
     if (!allowedStatuses.includes(employee.status)) {
       throw new ConflictException(
         `Cannot verify document. Employee status is ${employee.status}`,
@@ -357,7 +358,7 @@ export class DocumentService {
     const employee = await this.getEmployeeOrThrow(employeeId);
     this.validateRole(role, ['HR']);
 
-    const allowedStatuses = ['DOCUMENTS_PENDING', 'DOCUMENTS_SUBMITTED', 'UNDER_REVIEW', 'MANAGER_REVIEW'];
+    const allowedStatuses = ['REGISTERED', 'DOCUMENTS_PENDING', 'DOCUMENTS_SUBMITTED', 'UNDER_REVIEW', 'MANAGER_REVIEW'];
     if (!allowedStatuses.includes(employee.status)) {
       throw new ConflictException(
         `Cannot reject document. Employee status is ${employee.status}`,
@@ -433,7 +434,7 @@ export class DocumentService {
     const employee = await this.getEmployeeOrThrow(employeeId);
     this.validateRole(role, ['HR']);
 
-    const allowedStatuses = ['UNDER_REVIEW', 'DOCUMENTS_SUBMITTED', 'DOCUMENTS_PENDING'];
+    const allowedStatuses = ['REGISTERED', 'UNDER_REVIEW', 'DOCUMENTS_SUBMITTED', 'DOCUMENTS_PENDING'];
     if (!allowedStatuses.includes(employee.status)) {
       throw new ConflictException(
         `Cannot approve review. Employee status is ${employee.status}. It must be submitted, pending, or under review.`,

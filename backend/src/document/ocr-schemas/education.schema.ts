@@ -18,5 +18,4 @@ export const EducationSchema = {
     },
   },
   required: ['percentageOrCgpa', 'percentage', 'cgpa'],
-  additionalProperties: false,
 };
