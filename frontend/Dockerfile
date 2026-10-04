@@ -9,6 +9,7 @@ RUN npm config set strict-ssl false && npm config set registry https://registry.
 RUN npm ci
 
 COPY . .
+RUN mkdir -p public
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXTAUTH_SECRET=placeholder-secret-for-build-stage
