@@ -1,6 +1,8 @@
 # Multi-stage production build for NestJS Backend
 FROM node:22-slim AS builder
 
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /usr/src/app
 
 COPY package*.json ./
@@ -16,6 +18,8 @@ RUN npm run build
 
 # Production image
 FROM node:22-slim AS runner
+
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/app
 
